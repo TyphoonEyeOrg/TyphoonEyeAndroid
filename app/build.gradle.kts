@@ -279,9 +279,8 @@ android {
     }
 }
 
-// Assign each ABI split a unique versionCode so update managers (F-Droid,
-// GitHub Releases, device package installer) can distinguish APKs and prefer
-// the correct one.  arm64 gets the highest code so 64-bit devices always win.
+// F-Droid-recommended low-bit ABI encoding: versionCode = base * 10 + abiSuffix.
+// Matches metadata VercodeOperation (10*%c+1..4): armeabi-v7a < arm64-v8a < x86 < x86_64.
 val abiVersionCodes = mapOf(
     "armeabi-v7a" to 1,
     "arm64-v8a" to 2,
@@ -294,7 +293,8 @@ android.applicationVariants.configureEach {
         val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
         val abi = output.getFilter("ABI")
         if (abi != null) {
-            output.versionCodeOverride = (abiVersionCodes[abi] ?: 0) * 1_000_000 + appVersionCode
+            output.versionCodeOverride =
+                appVersionCode * 10 + (abiVersionCodes[abi] ?: 0)
         }
     }
 }
