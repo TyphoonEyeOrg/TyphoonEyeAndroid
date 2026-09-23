@@ -56,7 +56,7 @@ val openSourceLibraries = listOf(
         developer = "Seamain & contributors",
         license = "Apache-2.0",
         descriptionRes = R.string.oss_app_desc,
-        url = "https://github.com/Seamain/TyphoonEyeAndroid/blob/master/LICENSE"
+        url = "https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/blob/master/LICENSE"
     ),
     OssLibrary(
         name = "Jetpack Compose & Material 3",

@@ -1,6 +1,6 @@
 # TyphoonEye
 
-[![Build Android APK](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
+[![Build Android APK](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -58,7 +58,7 @@ Architecture: **MVVM + clean-ish layering** (UI → ViewModel → repository →
 ## Build
 
 ```bash
-git clone https://github.com/Seamain/TyphoonEyeAndroid.git
+git clone https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid.git
 cd TyphoonEyeAndroid
 ```
 
@@ -105,7 +105,7 @@ CI may override via `VERSION_NAME` / `VERSION_CODE` env vars.
 Workflow: [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
 
 - Push / PR on `master` → build artifacts  
-- Official tagged GitHub Releases (`v*`) are cut from the [`foss`](https://github.com/Seamain/TyphoonEyeAndroid/tree/foss) branch so they stay aligned with F-Droid  
+- Official tagged GitHub Releases (`v*`) are cut from the [`foss`](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/tree/foss) branch so they stay aligned with F-Droid  
 
 Do **not** push a `v*` tag from `master` unless you intend to replace that release.
 
@@ -115,7 +115,7 @@ Secrets used by CI (repository settings): API keys (optional), release keystore 
 
 ## F-Droid
 
-F-Droid packaging (no Play services, no in-app sideload updates) lives on the [`foss`](https://github.com/Seamain/TyphoonEyeAndroid/tree/foss) branch. Application source stays on GitHub; only metadata is submitted through [fdroiddata](https://gitlab.com/fdroid/fdroiddata).
+F-Droid packaging (no Play services, no in-app sideload updates) lives on the [`foss`](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/tree/foss) branch. Application source stays on GitHub; only metadata is submitted through [fdroiddata](https://gitlab.com/fdroid/fdroiddata).
 
 ---
 

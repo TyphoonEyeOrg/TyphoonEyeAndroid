@@ -1,6 +1,6 @@
 # 台风眼（TyphoonEye）
 
-[![Build Android APK](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
+[![Build Android APK](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -58,7 +58,7 @@
 ## 编译
 
 ```bash
-git clone https://github.com/Seamain/TyphoonEyeAndroid.git
+git clone https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid.git
 cd TyphoonEyeAndroid
 ```
 
@@ -102,7 +102,7 @@ CI 可用环境变量覆盖。
 工作流： [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
 
 - 向 `master` 推送 / PR → 构建产物  
-- 正式 `v*` GitHub Release 从 [`foss`](https://github.com/Seamain/TyphoonEyeAndroid/tree/foss) 分支打 tag，以便与 F-Droid 对齐  
+- 正式 `v*` GitHub Release 从 [`foss`](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/tree/foss) 分支打 tag，以便与 F-Droid 对齐  
 
 不要从 `master` 推送 `v*` 标签，除非你打算覆盖该版本的发行包。
 
@@ -112,7 +112,7 @@ CI 可用环境变量覆盖。
 
 ## F-Droid
 
-无 Play 服务、关闭侧载更新的打包在 [`foss`](https://github.com/Seamain/TyphoonEyeAndroid/tree/foss) 分支。应用源码仍在 GitHub，只通过 [fdroiddata](https://gitlab.com/fdroid/fdroiddata) 提交 metadata。
+无 Play 服务、关闭侧载更新的打包在 [`foss`](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/tree/foss) 分支。应用源码仍在 GitHub，只通过 [fdroiddata](https://gitlab.com/fdroid/fdroiddata) 提交 metadata。
 
 ---
 

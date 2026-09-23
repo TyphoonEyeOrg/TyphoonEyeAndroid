@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-13  
 **Application ID:** `seamain.org.typhoonEye`  
-**Source:** https://github.com/Seamain/TyphoonEyeAndroid
+**Source:** https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid
 
 This document describes how the TyphoonEye Android application handles data. The app is open source under the Apache License 2.0.
 
@@ -87,7 +87,7 @@ Privacy practices may change as features evolve. Material changes will be reflec
 ## Contact
 
 Open an issue on GitHub:  
-https://github.com/Seamain/TyphoonEyeAndroid/issues
+https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/issues
 
 ---
 
