@@ -1,6 +1,6 @@
 # TyphoonEye
 
-[![Build Android APK](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
+[![Build Android APK](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -58,7 +58,7 @@ Architecture: **MVVM + clean-ish layering** (UI → ViewModel → repository →
 ## Build
 
 ```bash
-git clone https://github.com/Seamain/TyphoonEyeAndroid.git
+git clone https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid.git
 cd TyphoonEyeAndroid
 ```
 
