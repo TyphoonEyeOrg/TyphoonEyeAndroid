@@ -143,6 +143,7 @@
     <string name="update_ok">好的</string>
     <string name="update_error_check_failed">无法检查更新，请稍后重试。</string>
     <string name="update_error_no_apk">最新发布中没有找到安装包，请稍后再试或前往发布页查看。</string>
+    <string name="update_no_compatible_apk">没有找到适合本机 CPU 架构的安装包，请前往发布页手动下载。</string>
     <string name="update_error_no_release">尚未发布正式版本，请稍后再试。</string>
     <string name="update_error_http">服务器暂时不可用（错误码 %1$d），请稍后重试。</string>
     <string name="update_error_rate_limited">请求过于频繁，请稍后再试。</string>

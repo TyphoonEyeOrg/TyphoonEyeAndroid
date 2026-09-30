@@ -129,7 +129,10 @@ jobs:
           mkdir -p output_apks
           find app/build/outputs/apk/ -name "*.apk" | while read file; do
             filename=$(basename "$file")
-            new_name="TyphoonEye-${{ env.VERSION }}-${filename}"
+            # app-<abi>-release.apk -> TyphoonEye-vX-app-github-<abi>-release.apk
+            # app-universal-release.apk -> TyphoonEye-vX-app-github-release.apk (TYP-5/TYP-36)
+            filename="${filename/app-universal-/app-}"
+            new_name="TyphoonEye-${{ env.VERSION }}-${filename/app-/app-github-}"
             cp "$file" "output_apks/$new_name"
           done
           echo "Generated APK files:"
