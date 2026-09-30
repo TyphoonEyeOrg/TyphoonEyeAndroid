@@ -19,8 +19,8 @@ import seamain.org.typhoonEye.domain.util.compareVersionLabels
  *   `universal`); else `null` → caller sends the user to the release page.
  *
  * Expected asset naming (TYP-36), e.g.:
- * `TyphoonEye-v1.3.0-app-github-arm64-v8a-release.apk`,
- * `TyphoonEye-v1.3.0-app-github-universal-release.apk`.
+ * `TyphoonEye-v1.3.0-app-github-split-arm64-v8a-release.apk`,
+ * `TyphoonEye-v1.3.0-app-github-release.apk` (universal).
  */
 object UpdateAssetSelector {
 

@@ -133,10 +133,16 @@ jobs:
           mkdir -p output_apks
           find app/build/outputs/apk/ -name "*.apk" | while read file; do
             filename=$(basename "$file")
-            # app-<abi>-release.apk -> TyphoonEye-vX-app-github-<abi>-release.apk
-            # app-universal-release.apk -> TyphoonEye-vX-app-github-release.apk (TYP-5/TYP-36)
-            filename="${filename/app-universal-/app-}"
-            new_name="TyphoonEye-${{ env.VERSION }}-${filename/app-/app-github-}"
+            # app-universal-release.apk -> TyphoonEye-vX-app-github-release.apk
+            # app-<abi>-release.apk       -> TyphoonEye-vX-app-github-split-<abi>-release.apk
+            # GitHub lists assets by name: "release" < "split", so universal sorts
+            # first and <=1.2.0 updaters (take first .apk) still get a universal APK.
+            # (TYP-5/TYP-36)
+            if [[ "$filename" == app-universal-* ]]; then
+              new_name="TyphoonEye-${{ env.VERSION }}-${filename/app-universal-/app-github-}"
+            else
+              new_name="TyphoonEye-${{ env.VERSION }}-${filename/app-/app-github-split-}"
+            fi
             cp "$file" "output_apks/$new_name"
           done
           echo "Generated APK files:"

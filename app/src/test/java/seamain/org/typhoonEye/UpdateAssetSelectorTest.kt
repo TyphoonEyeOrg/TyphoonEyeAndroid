@@ -21,18 +21,18 @@ class UpdateAssetSelectorTest {
     /** Expected TYP-36 naming: github flavor, per-ABI + universal, plus F-Droid noise. */
     private val splitRelease = listOf(
         apk("TyphoonEye-v1.3.0-app-fdroid-arm64-v8a-release.apk"),
-        apk("TyphoonEye-v1.3.0-app-github-armeabi-v7a-release.apk"),
-        apk("TyphoonEye-v1.3.0-app-github-arm64-v8a-release.apk"),
-        apk("TyphoonEye-v1.3.0-app-github-x86-release.apk"),
-        apk("TyphoonEye-v1.3.0-app-github-x86_64-release.apk"),
-        apk("TyphoonEye-v1.3.0-app-github-universal-release.apk"),
+        apk("TyphoonEye-v1.3.0-app-github-split-armeabi-v7a-release.apk"),
+        apk("TyphoonEye-v1.3.0-app-github-split-arm64-v8a-release.apk"),
+        apk("TyphoonEye-v1.3.0-app-github-split-x86-release.apk"),
+        apk("TyphoonEye-v1.3.0-app-github-split-x86_64-release.apk"),
+        apk("TyphoonEye-v1.3.0-app-github-release.apk"),
         GitHubAssetDto(name = "mapping.txt", browserDownloadUrl = "https://example.invalid/m")
     )
 
     @Test
     fun arm64DevicePicksArm64GithubApk() {
         assertEquals(
-            "TyphoonEye-v1.3.0-app-github-arm64-v8a-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-arm64-v8a-release.apk",
             UpdateAssetSelector.selectAsset(splitRelease, arm64Device)?.name
         )
     }
@@ -40,7 +40,7 @@ class UpdateAssetSelectorTest {
     @Test
     fun armv7DevicePicksV7aApk() {
         assertEquals(
-            "TyphoonEye-v1.3.0-app-github-armeabi-v7a-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-armeabi-v7a-release.apk",
             UpdateAssetSelector.selectAsset(splitRelease, v7aDevice)?.name
         )
     }
@@ -48,7 +48,7 @@ class UpdateAssetSelectorTest {
     @Test
     fun x8664DevicePicksX8664NotX86() {
         assertEquals(
-            "TyphoonEye-v1.3.0-app-github-x86_64-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-x86_64-release.apk",
             UpdateAssetSelector.selectAsset(splitRelease, x8664Device)?.name
         )
     }
@@ -78,7 +78,7 @@ class UpdateAssetSelectorTest {
 
     @Test
     fun noMatchingAbiAndNoUniversalGivesNothing() {
-        val assets = listOf(apk("TyphoonEye-v1.3.0-app-github-x86_64-release.apk"))
+        val assets = listOf(apk("TyphoonEye-v1.3.0-app-github-split-x86_64-release.apk"))
         assertNull(UpdateAssetSelector.selectAsset(assets, arm64Device))
     }
 
@@ -153,8 +153,21 @@ class UpdateAssetSelectorTest {
 
     @Test
     fun abiTokenParsing() {
-        assertEquals("x86", UpdateAssetSelector.abiOf("app-github-x86-release.apk"))
-        assertEquals("x86_64", UpdateAssetSelector.abiOf("app-github-x86_64-release.apk"))
-        assertNull(UpdateAssetSelector.abiOf("app-github-universal-release.apk"))
+        assertEquals("x86", UpdateAssetSelector.abiOf("app-github-split-x86-release.apk"))
+        assertEquals("x86_64", UpdateAssetSelector.abiOf("app-github-split-x86_64-release.apk"))
+        assertNull(UpdateAssetSelector.abiOf("app-github-release.apk"))
+    }
+
+    @Test
+    fun releaseAssetNames_sortUniversalFirst_forLegacyUpdater() {
+        // GitHub lists release assets by file name; <=1.2.0 updaters take the first .apk.
+        val names = listOf(
+            "TyphoonEye-v1.3.0-app-github-split-arm64-v8a-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-armeabi-v7a-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-x86-release.apk",
+            "TyphoonEye-v1.3.0-app-github-split-x86_64-release.apk",
+            "TyphoonEye-v1.3.0-app-github-release.apk",
+        )
+        assertEquals("TyphoonEye-v1.3.0-app-github-release.apk", names.sorted().first())
     }
 }
