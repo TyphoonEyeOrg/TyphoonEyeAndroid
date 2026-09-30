@@ -95,14 +95,20 @@ jobs:
           fi
           # Strip leading v for Android versionName / Gradle VERSION_NAME
           VERSION_NAME="${TAG_NAME#v}"
-          VERSION_CODE="$(git rev-list --count HEAD)"
+          # versionCode comes only from version.properties (base*10+abi, see
+          # app/build.gradle.kts). Do NOT derive it from commit count: that would
+          # jump past F-Droid's codes and break GitHub <-> F-Droid switching.
+          PROPS_NAME="$(sed -n 's/^VERSION_NAME=//p' version.properties | tr -d '[:space:]')"
+          if [[ "${{ github.ref }}" == refs/tags/v* && "$VERSION_NAME" != "$PROPS_NAME" ]]; then
+            echo "::error::Tag $TAG_NAME does not match version.properties VERSION_NAME=$PROPS_NAME"
+            exit 1
+          fi
 
           echo "VERSION=$TAG_NAME" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME code=$VERSION_CODE"
+          echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME (versionCode from version.properties)"
 
       - name: Build Debug APK
         if: ${{ inputs.build_type == 'debug' }}
@@ -111,7 +117,6 @@ jobs:
           JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
@@ -121,7 +126,6 @@ jobs:
           JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Process & Rename APK Artifacts
