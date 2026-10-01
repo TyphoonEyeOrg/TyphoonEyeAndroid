@@ -3,7 +3,9 @@ name: Build & Release Android APK
 on:
   push:
     branches: [ "main", "master", "foss" ]
-    tags: [ "v*" ]
+    # No tag trigger on foss: foss only gets fdroid-* tags, and the fdroid-*
+    # reference Release is created by hand from this branch's CI artifacts.
+    # v* tags/Releases belong to master (GitHub edition).
   pull_request:
     branches: [ "main", "master", "foss" ]
   workflow_dispatch:
@@ -17,9 +19,9 @@ on:
           - release
           - debug
       create_release:
-        description: 'Publish Release to GitHub Releases page'
+        description: 'Publish Release to GitHub Releases page (foss: normally off; fdroid-* Releases are made by hand)'
         required: false
-        default: true
+        default: false
         type: boolean
 
 jobs:
@@ -97,14 +99,14 @@ jobs:
           fi
           # Strip leading v for Android versionName / Gradle VERSION_NAME
           VERSION_NAME="${TAG_NAME#v}"
-          VERSION_CODE="$(git rev-list --count HEAD)"
+          # versionCode is never derived from commit count; Gradle reads
+          # version.properties (F-Droid low-bit ABI scheme, base*10+1..4).
 
           echo "VERSION=$TAG_NAME" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME code=$VERSION_CODE"
+          echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME"
 
       - name: Build Debug APK
         if: ${{ inputs.build_type == 'debug' }}
@@ -113,19 +115,9 @@ jobs:
           JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
-        run: ./gradlew assembleGithubDebug --stacktrace
+        run: ./gradlew assembleFdroidDebug --stacktrace
 
-      # github flavor keeps in-app GitHub updates (for GitHub users).
-      - name: Build Release APK (github flavor)
-        if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
-        env:
-          JUHE_KEY: ${{ secrets.JUHE_KEY }}
-          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
-          JUHEKEY: ${{ secrets.JUHEKEY }}
-          VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
-        run: ./gradlew assembleGithubRelease --stacktrace
+      # No github-flavor build on foss: GitHub-edition APKs come only from master.
 
       # fdroid flavor APK is uploaded too so F-Droid's reproducible-build
       # check can compare against the same binary it builds.
