@@ -229,9 +229,48 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    // GitHub edition ships per-ABI APKs plus one universal fallback (TYP-5).
+    // The in-app updater picks the APK matching Build.SUPPORTED_ABIS, else universal.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
+    packaging {
+        // Compress native .so files (legacy packaging) to keep per-ABI APKs small,
+        // same as the foss / F-Droid line.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
+    }
+}
+
+// versionCode = base * 10 + abiSuffix, same encoding as the F-Droid line
+// (metadata VercodeOperation 10*%c+1..4). Universal gets suffix 0 so it never
+// shadows a per-ABI APK of the same release, and 1.3.0 (base 16) -> 160..164
+// stays above the pre-split 15.
+val abiVersionCodes = mapOf(
+    "armeabi-v7a" to 1,
+    "arm64-v8a" to 2,
+    "x86" to 3,
+    "x86_64" to 4,
+)
+
+android.applicationVariants.configureEach {
+    outputs.configureEach {
+        val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+        val abi = output.getFilter("ABI")
+        output.versionCodeOverride =
+            appVersionCode * 10 + (abi?.let { abiVersionCodes[it] } ?: 0)
     }
 }
 

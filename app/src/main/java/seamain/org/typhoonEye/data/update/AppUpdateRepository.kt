@@ -58,31 +58,27 @@ class AppUpdateRepository @Inject constructor(
                 preferences.markUpdateChecked()
                 return _state.value
             }
-            val asset = release.assets.firstOrNull { asset ->
-                asset.name.endsWith(".apk", ignoreCase = true) &&
-                    asset.browserDownloadUrl.isNotBlank()
-            }
-            if (asset == null) {
-                // Release exists but no APK attached — not a hard failure for "check".
-                _state.value = AppUpdateState.UpToDate
-                preferences.markUpdateChecked()
-                return _state.value
-            }
-            val remoteVersion = release.tagName.ifBlank { release.name }
+            val remoteVersion = release.tagName
             val current = BuildConfig.VERSION_NAME
             if (!isNewerVersion(remoteVersion, current)) {
                 _state.value = AppUpdateState.UpToDate
                 preferences.markUpdateChecked()
                 return _state.value
             }
+            // Never guess: no APK for this device's ABIs (and no universal) -> apkUrl
+            // stays blank and the dialog sends the user to the release page instead.
+            val asset = UpdateAssetSelector.selectAsset(
+                release.assets,
+                Build.SUPPORTED_ABIS.toList()
+            )
             val info = AppUpdateInfo(
                 versionName = remoteVersion.removePrefix("v").removePrefix("V"),
                 tagName = release.tagName,
                 releaseNotes = release.body.trim(),
                 htmlUrl = release.htmlUrl,
-                apkUrl = asset.browserDownloadUrl,
-                apkName = asset.name.ifBlank { "TyphoonEye-${remoteVersion}.apk" },
-                apkSizeBytes = asset.size
+                apkUrl = asset?.browserDownloadUrl.orEmpty(),
+                apkName = asset?.name?.ifBlank { null } ?: "TyphoonEye-${remoteVersion}.apk",
+                apkSizeBytes = asset?.size ?: 0L
             )
             _state.value = AppUpdateState.Available(info)
             preferences.markUpdateChecked()
@@ -95,32 +91,12 @@ class AppUpdateRepository @Inject constructor(
     }
 
     /**
-     * Prefer `/releases/latest`; on 404 fall back to listing releases and pick the
-     * newest non-draft item that has an APK (includes prerelease if that's all there is).
+     * List releases and pick the newest `v*` release with an APK this edition can use.
+     * `/releases/latest` is deliberately not used: it may point at a non-app release
+     * such as `fdroid-*` (F-Droid reference APKs), which must be ignored (TYP-5).
      */
     private suspend fun fetchBestRelease(): GitHubReleaseDto? {
-        val latest = api.getLatestRelease(owner, repo)
-        when {
-            latest.isSuccessful -> {
-                val body = latest.body()
-                if (body != null && !body.draft) return body
-            }
-            latest.code() == 404 -> {
-                // No published "latest" — fall through to list.
-            }
-            latest.code() in 400..499 -> {
-                throw IOException(
-                    appContext.getString(R.string.update_error_http, latest.code())
-                )
-            }
-            else -> {
-                throw IOException(
-                    appContext.getString(R.string.update_error_http, latest.code())
-                )
-            }
-        }
-
-        val listed = api.listReleases(owner, repo, perPage = 20)
+        val listed = api.listReleases(owner, repo, perPage = 30)
         when {
             listed.code() == 404 -> return null
             !listed.isSuccessful -> {
@@ -129,15 +105,7 @@ class AppUpdateRepository @Inject constructor(
                 )
             }
         }
-        val releases = listed.body().orEmpty().filter { !it.draft }
-
-        // Prefer stable with APK, then any with APK, then newest stable.
-        return releases.firstOrNull { r ->
-            !r.prerelease && r.assets.any { it.name.endsWith(".apk", ignoreCase = true) }
-        } ?: releases.firstOrNull { r ->
-            r.assets.any { it.name.endsWith(".apk", ignoreCase = true) }
-        } ?: releases.firstOrNull { !it.prerelease }
-            ?: releases.firstOrNull()
+        return UpdateAssetSelector.selectRelease(listed.body().orEmpty())
     }
 
     private fun humanizeCheckError(e: Exception): String {
@@ -156,6 +124,11 @@ class AppUpdateRepository @Inject constructor(
     }
 
     suspend fun downloadUpdate(info: AppUpdateInfo): AppUpdateState {
+        if (info.apkUrl.isBlank()) {
+            val err = AppUpdateState.Error(appContext.getString(R.string.update_no_compatible_apk))
+            _state.value = err
+            return err
+        }
         _state.value = AppUpdateState.Downloading(info, 0)
         return try {
             val file = withContext(Dispatchers.IO) {

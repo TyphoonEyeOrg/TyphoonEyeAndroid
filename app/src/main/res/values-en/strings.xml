@@ -143,6 +143,7 @@
     <string name="update_ok">OK</string>
     <string name="update_error_check_failed">Couldn’t check for updates. Try again later.</string>
     <string name="update_error_no_apk">Latest release has no APK asset</string>
+    <string name="update_no_compatible_apk">No package matches this device\'s CPU architecture. Please download it manually from the release page.</string>
     <string name="update_error_no_release">No published release yet. Try again later.</string>
     <string name="update_error_http">Server error (%1$d)</string>
     <string name="update_error_rate_limited">GitHub rate limit hit. Try again later.</string>
