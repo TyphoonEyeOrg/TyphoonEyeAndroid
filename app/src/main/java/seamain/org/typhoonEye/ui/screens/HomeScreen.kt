@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Cyclone
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -205,10 +206,12 @@ fun HomeScreen(
                                     dataMode = dataMode,
                                     lastUpdated = lastUpdated,
                                     fromCache = state.fromCache,
+                                    offline = state.staleMessage != null,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                 )
                             }
-                            if (state.fromCache) {
+                            // Banner only when the network actually failed, not for a fresh cache hit.
+                            if (state.fromCache && state.staleMessage != null) {
                                 item(key = "offline-banner") {
                                     OfflineCacheBanner(
                                         message = state.staleMessage,
@@ -293,6 +296,7 @@ private fun StatusSummaryRow(
     dataMode: DataMode,
     lastUpdated: String?,
     fromCache: Boolean = false,
+    offline: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     LazyRow(
@@ -308,7 +312,7 @@ private fun StatusSummaryRow(
                     label = { Text(stringResource(R.string.data_cached)) },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Filled.CloudOff,
+                            imageVector = if (offline) Icons.Filled.CloudOff else Icons.Filled.History,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -337,7 +341,8 @@ private fun StatusSummaryRow(
                 )
             )
         }
-        item {
+        // Cached data gets the 「缓存」 chip above instead of 「实时数据」.
+        if (!fromCache || dataMode != DataMode.Live) item {
             AssistChip(
                 onClick = {},
                 enabled = false,
