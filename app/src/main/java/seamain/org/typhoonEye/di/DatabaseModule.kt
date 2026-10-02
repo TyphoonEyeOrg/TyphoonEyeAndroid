@@ -10,6 +10,9 @@ import kotlinx.serialization.json.Json
 import seamain.org.typhoonEye.data.local.TyphoonDao
 import seamain.org.typhoonEye.data.local.TyphoonDatabase
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
+import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.data.sync.SharedPrefsFeedSyncStore
+import seamain.org.typhoonEye.domain.util.WallClock
 import javax.inject.Singleton
 
 @Module
@@ -32,4 +35,13 @@ object DatabaseModule {
         dao: TyphoonDao,
         json: Json
     ): TyphoonLocalDataSource = TyphoonLocalDataSource(dao, json)
+
+    @Provides
+    @Singleton
+    fun provideFeedSyncStore(@ApplicationContext context: Context): FeedSyncStore =
+        SharedPrefsFeedSyncStore(context)
+
+    @Provides
+    @Singleton
+    fun provideWallClock(): WallClock = WallClock.System
 }

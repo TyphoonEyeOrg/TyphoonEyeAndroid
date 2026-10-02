@@ -19,6 +19,12 @@ class TyphoonLocalDataSource(
     suspend fun getById(id: String): Typhoon? =
         dao.getById(id)?.toDomain(json)
 
+    suspend fun getCachedAtMs(id: String): Long? =
+        dao.getById(id)?.cachedAtEpochMs
+
+    suspend fun latestCachedAtMs(): Long? =
+        dao.getAll().maxOfOrNull { it.cachedAtEpochMs }
+
     suspend fun replaceAll(typhoons: List<Typhoon>) {
         val now = System.currentTimeMillis()
         dao.replaceAll(typhoons.map { it.toEntity(json, now) })
