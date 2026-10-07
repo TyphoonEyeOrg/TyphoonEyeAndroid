@@ -1,13 +1,15 @@
 TyphoonEye is a lightweight, open-source real-time typhoon tracking and weather alert app for Android.
 
 Features:
-• Live typhoon tracking with interactive MapLibre maps
+• Typhoon tracking with interactive MapLibre maps (live data needs your own API key, see below)
 • Historical tracks, forecast paths, and 7/10/12-level wind radii by quadrant
 • Optional distance-based emergency alerts (needs location permission)
 • Material Design 3, dynamic color, light/dark theme, multiple languages
-• Offline cache and bundled demo data when API keys are not configured
+• Clearly labeled demo mode with fictional sample storms when no API key is entered
 
 Network note:
-Live storm data may come from third-party weather APIs (e.g. Juhe / QWeather) when keys are available. Optional mainland China basemap tiles may use Amap. The app runs without keys in demo/cache mode. No ads or analytics.
+Live storm data comes from third-party weather APIs (QWeather / Juhe). The F-Droid build ships without any bundled keys: to get live data, get your own QWeather API key (plus your account's API host) or Juhe API key and enter it in Settings → Custom data source keys. Your key stays on your device — it is never uploaded, never logged and excluded from backups — and is sent only to that provider. Without a key the app shows no live typhoon data: it explains this, links to the key settings and offers an optional demo mode with fictional sample storms ("Sample data — not real typhoons"). Optional mainland China basemap tiles may use Amap. No ads or analytics.
+
+This is not an official meteorological app. In an emergency, always follow your local meteorological authority.
 
 F-Droid builds update through the F-Droid client (no GitHub APK sideload).

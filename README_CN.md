@@ -24,7 +24,8 @@
 - 实时状态通知 + 后台刷新（`WorkManager`）  
 - Material 3、动态取色、深浅色主题  
 - 语言：简体中文、繁體中文、粵語、English  
-- 未配置密钥时使用**演示数据 / 离线缓存**  
+- **自带密钥：** 在「设置 → 自定义数据源密钥」中填入自己的和风天气（API Key + API Host）或聚合数据 API 密钥即可获取实时数据；密钥只保存在本机（不上传、不写日志、不进入备份与设备迁移）  
+- 完全没有密钥时会说明「此版本未配置实时数据源」，提供跳转到密钥设置的按钮，以及明确标注的**演示模式**（虚构示例台风，不含实时数据，release 构建不发通知）  
 - 双渠道：
   - `github`：支持从 GitHub Releases 应用内更新  
   - `fdroid`：仅通过 F-Droid 更新（无侧载安装权限）
@@ -74,7 +75,17 @@ cp local.properties.example local.properties
 | `QWEATHER_API_KEY` 或 JWT 字段 | 和风台风与预警（可选） |
 | `AMAP_KEY` | 中国大陆高德栅格底图（可选） |
 
-不填密钥也可安装运行（演示 / 缓存模式）。  
+构建时密钥是可选的：用户也可以在应用内「设置 → 自定义数据源密钥」填写自己的密钥（和风 API Key + API Host，
+或聚合密钥）。应用内填写的密钥优先于构建时密钥；密钥按请求读取，无需重启应用。
+
+完全没有密钥时也可安装运行，但**无法显示实时台风数据**：首页会提示未配置数据源，提供「填写 API 密钥」按钮，
+以及可选的、明确标注「示例数据，非真实台风」的**演示模式**。
+
+> **F-Droid 版：** F-Droid 编译 `fdroid` 渠道时不内置任何 API Key。如需实时数据，请到
+> [和风天气](https://console.qweather.com/)（API Key + 账号专属 API Host）或[聚合数据](https://www.juhe.cn/)
+> 申请自己的 API 密钥，并在设置中填写。密钥只保存在本机（独立 DataStore 文件，不进入云备份和设备迁移，日志中脱敏），
+> 只会发送给对应的数据服务商。
+
 详见 [local.properties.example](local.properties.example) 与 [PRIVACY.md](PRIVACY.md)。
 
 ### 常用命令

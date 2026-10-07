@@ -1,1 +1,1 @@
-Real-time typhoon tracking and meteorological map visualization
+Typhoon tracks, forecasts and alerts — live data with your own API key

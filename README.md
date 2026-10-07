@@ -24,7 +24,8 @@ Built with **Jetpack Compose** and **Material Design 3**.
 - Live status notification + background refresh (`WorkManager`)
 - Material 3, dynamic color, light / dark theme
 - Languages: Simplified Chinese, Traditional Chinese, Cantonese, English
-- **Demo / offline cache** when API keys are not configured
+- **Bring your own key:** enter your own QWeather (API key + API host) or Juhe API key in *Settings → Custom data source keys* to get live data. Keys stay on the device (never uploaded, never logged, excluded from backup and device transfer).
+- No key at all? The app says no live data source is configured, links to the key settings and offers a clearly labeled **demo mode** with fictional sample storms (no live data, no notifications in release builds).
 - Two distribution flavors:
   - `github` — in-app update from GitHub Releases
   - `fdroid` — updates via F-Droid only (no sideload installer)
@@ -76,7 +77,19 @@ cp local.properties.example local.properties
 | `QWEATHER_API_KEY` or JWT fields | QWeather typhoon + warnings (optional) |
 | `AMAP_KEY` | Amap raster basemap in mainland China (optional) |
 
-Without keys the app still installs and runs with **demo / cached** data.
+Build-time keys are optional: users can also enter their own keys in the app
+(*Settings → Custom data source keys*: QWeather API key + API host, or Juhe key). A key entered in
+the app takes priority over a build-time key; keys are read per request, so no restart is needed.
+
+Without any key the app still installs and runs, but it **cannot show live typhoon data**: the home
+screen says no data source is configured, offers an **Enter your API key** button and an optional,
+clearly labeled **demo mode** (fictional sample storms, marked "Sample data — not real typhoons").
+
+> **F-Droid build:** F-Droid compiles the `fdroid` flavor without any bundled API keys. To get live
+> data, get your own API key from [QWeather](https://console.qweather.com/) (key + your account's API
+> host) or [Juhe](https://www.juhe.cn/) and enter it in Settings. The key is stored only on your device
+> (dedicated DataStore file, excluded from cloud backup and device transfer, masked in logs) and is
+> sent only to that provider.
 
 See [local.properties.example](local.properties.example) and [PRIVACY.md](PRIVACY.md).
 
