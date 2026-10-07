@@ -68,8 +68,16 @@ enum class AppLanguage(val tag: String, val nativeLabel: String) {
 
         fun fromSystemDefault(): AppLanguage {
             val sys = LocaleListCompat.getAdjustedDefault().get(0) ?: Locale.getDefault()
-            return fromLocaleTags(sys.toLanguageTag()) ?: ZhHans
+            return resolveSupported(sys.toLanguageTag())
         }
+
+        /**
+         * Maps any locale tag to a supported UI language. Unsupported languages
+         * (de, fr, ja, …) resolve to [English], matching the English default
+         * `values/` resources; they must not be treated as Simplified Chinese
+         * (that also used to force the 高德 basemap for e.g. German users).
+         */
+        fun resolveSupported(tag: String?): AppLanguage = fromLocaleTags(tag) ?: English
 
         fun apply(language: AppLanguage) {
             val locales = if (language == System || language.tag.isBlank()) {
