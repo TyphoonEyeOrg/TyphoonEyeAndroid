@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.ui.components.DemoDataBanner
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
@@ -94,7 +95,9 @@ fun DetailScreen(
     shareText: String,
     modifier: Modifier = Modifier,
     userLocation: UserLocation? = null,
-    mapBasemap: MapBasemap = MapBasemap.Auto
+    mapBasemap: MapBasemap = MapBasemap.Auto,
+    /** Sample storm from demo mode: keep the "not real" marker visible here too. */
+    isDemo: Boolean = false
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -154,6 +157,12 @@ fun DetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (isDemo) {
+                DemoDataBanner(
+                    compact = true,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
             DetailHero(typhoon = typhoon)
 
             if (loading) {

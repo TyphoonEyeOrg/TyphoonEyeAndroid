@@ -32,6 +32,10 @@ import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.domain.model.DataSource
+import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.SourceFailureKind
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
@@ -217,26 +221,108 @@ class TyphoonRepositoryTest {
         verify(localDataSource).replaceAll(emptyList())
     }
 
+    private fun repoWith(juheKey: String, qWeatherConfigured: Boolean) = DefaultTyphoonRepository(
+        juheApi = juheApi,
+        qWeatherApi = qWeatherApi,
+        juheKey = juheKey,
+        qWeatherAuth = auth(configured = qWeatherConfigured),
+        localDataSource = localDataSource,
+        syncStore = syncStore,
+        clock = clock
+    )
+
     @Test
-    fun `getActiveTyphoons reports missing credentials without crashing`() = runTest {
-        val emptyRepo = DefaultTyphoonRepository(
-            juheApi = juheApi,
-            qWeatherApi = qWeatherApi,
-            juheKey = "",
-            qWeatherAuth = auth(configured = false),
-            localDataSource = localDataSource,
-            syncStore = syncStore,
-            clock = clock
-        )
+    fun `getActiveTyphoons without any key returns typed NoDataSourceConfiguredError`() = runTest {
+        // F-Droid build: no JUHE_KEY, no QWeather credentials.
+        val emptyRepo = repoWith(juheKey = "", qWeatherConfigured = false)
         whenever(localDataSource.getAll()).thenReturn(emptyList())
 
         val result = emptyRepo.getActiveTyphoons()
+
         assertTrue(result.isFailure)
-        val message = result.exceptionOrNull()?.message.orEmpty()
-        assertTrue(message.contains("JUHE_KEY"))
-        assertTrue(message.contains("和风"))
+        assertTrue(result.exceptionOrNull() is NoDataSourceConfiguredError)
+        assertFalse(emptyRepo.hasAnyDataSource)
+        // No network attempts and no cache wipe.
         verify(juheApi, never()).getActiveTyphoons(any())
         verify(qWeatherApi, never()).getStormList(any(), any())
+        verify(localDataSource, never()).replaceAll(any())
+    }
+
+    @Test
+    fun `getActiveTyphoons without any key still serves existing Room cache`() = runTest {
+        val emptyRepo = repoWith(juheKey = "", qWeatherConfigured = false)
+        val cached = listOf(Typhoon(id = "202609", name = "BAVI", englishName = "BAVI", status = "active"))
+        whenever(localDataSource.getAll()).thenReturn(cached)
+
+        val feed = emptyRepo.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.fromCache)
+        assertTrue(feed.staleReason is NoDataSourceConfiguredError)
+        assertEquals(cached, feed.typhoons)
+    }
+
+    @Test
+    fun `getActiveTyphoons with only Juhe configured reports typed Juhe failure`() = runTest {
+        val juheOnly = repoWith(juheKey = juheKey, qWeatherConfigured = false)
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(reason = "错误的请求KEY", errorCode = 10001, result = null)
+        )
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
+        val error = juheOnly.getActiveTyphoons().exceptionOrNull()
+
+        assertTrue(error is DataSourcesFailedError)
+        val failures = (error as DataSourcesFailedError).failures
+        assertEquals(1, failures.size)
+        assertEquals(DataSource.Juhe, failures.single().source)
+        assertEquals(SourceFailureKind.InvalidKey, failures.single().kind)
+        assertEquals("10001", failures.single().code)
+        // Unconfigured QWeather is skipped, not reported as a failure.
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
+
+    @Test
+    fun `getActiveTyphoons maps quota and network failures per source`() = runTest {
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(reason = "超过每日可允许请求次数", errorCode = 10012, result = null)
+        )
+        whenever(qWeatherApi.getStormList(any(), any())).thenThrow(RuntimeException("timeout"))
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
+        val error = repository.getActiveTyphoons().exceptionOrNull() as DataSourcesFailedError
+
+        assertEquals(
+            listOf(
+                DataSource.Juhe to SourceFailureKind.QuotaExceeded,
+                DataSource.QWeather to SourceFailureKind.Network
+            ),
+            error.failures.map { it.source to it.kind }
+        )
+    }
+
+    @Test
+    fun `typed error messages contain no CJK text`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        val noSource = repoWith(juheKey = "", qWeatherConfigured = false)
+            .getActiveTyphoons().exceptionOrNull()!!
+        whenever(juheApi.getActiveTyphoons(any())).thenThrow(RuntimeException("down"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenThrow(RuntimeException("down"))
+        val failed = repository.getActiveTyphoons().exceptionOrNull()!!
+
+        val cjk = Regex("[\\u4e00-\\u9fff]")
+        assertFalse(noSource.message.orEmpty().contains(cjk))
+        assertFalse(failed.message.orEmpty().contains(cjk))
+    }
+
+    @Test
+    fun `getTyphoonDetail without any key returns typed error and no network`() = runTest {
+        val emptyRepo = repoWith(juheKey = "", qWeatherConfigured = false)
+
+        val result = emptyRepo.getTyphoonDetail("202609")
+
+        assertTrue(result.exceptionOrNull() is NoDataSourceConfiguredError)
+        verify(juheApi, never()).getTyphoonDetail(any(), any())
+        verify(qWeatherApi, never()).getStormTrack(any())
     }
 
     @Test
@@ -280,7 +366,11 @@ class TyphoonRepositoryTest {
         assertTrue(feed.fromCache)
         assertEquals(1, feed.typhoons.size)
         assertEquals("巴威", feed.typhoons.first().name)
-        assertTrue(feed.staleMessage?.isNotBlank() == true)
+        val reason = feed.staleReason as DataSourcesFailedError
+        assertEquals(
+            listOf(SourceFailureKind.Network, SourceFailureKind.Network),
+            reason.failures.map { it.kind }
+        )
         verify(localDataSource).getAll()
         verify(localDataSource, never()).replaceAll(any())
     }
@@ -357,7 +447,7 @@ class TyphoonRepositoryTest {
         val feed = repository.getActiveTyphoons().getOrThrow()
 
         assertTrue(feed.fromCache)
-        assertNull(feed.staleMessage)
+        assertNull(feed.staleReason)
         assertEquals(nowMs - 9 * listMinute, feed.fetchedAtEpochMs)
         assertEquals(1, feed.typhoons.size)
         verify(juheApi, never()).getActiveTyphoons(any())
@@ -503,7 +593,7 @@ class TyphoonRepositoryTest {
     }
 
     @Test
-    fun `remote failure falls back to cache with stale message and last fetch time`() = runTest {
+    fun `remote failure falls back to cache with stale reason and last fetch time`() = runTest {
         val fetchedAt = nowMs - 3 * 60 * listMinute
         syncStore.lastListFetchAtMs = fetchedAt
         whenever(juheApi.getActiveTyphoons(any())).thenThrow(RuntimeException("network down"))
@@ -513,7 +603,7 @@ class TyphoonRepositoryTest {
         val feed = repository.getActiveTyphoons().getOrThrow()
 
         assertTrue(feed.fromCache)
-        assertTrue(feed.staleMessage?.isNotBlank() == true)
+        assertTrue(feed.staleReason is DataSourcesFailedError)
         assertEquals(fetchedAt, feed.fetchedAtEpochMs)
         assertEquals(fetchedAt, syncStore.lastListFetchAtMs)
     }

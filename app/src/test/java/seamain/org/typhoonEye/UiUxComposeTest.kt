@@ -19,6 +19,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import seamain.org.typhoonEye.data.preferences.UserSettings
+import seamain.org.typhoonEye.domain.model.DataSource
+import seamain.org.typhoonEye.domain.model.SourceFailure
+import seamain.org.typhoonEye.domain.model.SourceFailureKind
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.DataMode
@@ -148,7 +151,11 @@ class UiUxComposeTest {
             Box(modifier = Modifier.size(412.dp, 915.dp)) {
                 TyphoonEyeTheme {
                     HomeScreen(
-                        uiState = TyphoonUiState.Error("网络不可用"),
+                        uiState = TyphoonUiState.Error(
+                            failures = listOf(
+                                SourceFailure(DataSource.Juhe, SourceFailureKind.Network, detail = "timeout")
+                            )
+                        ),
                         filteredTyphoons = emptyList(),
                         isRefreshing = false,
                         query = "",
@@ -168,8 +175,10 @@ class UiUxComposeTest {
         }
 
         composeRule.onNodeWithText("加载失败").assertIsDisplayed()
-        composeRule.onNodeWithText("网络不可用").assertIsDisplayed()
+        composeRule.onNodeWithText("聚合数据：网络请求失败").assertIsDisplayed()
         composeRule.onNodeWithText("重试").assertIsDisplayed()
+        // Real failures also offer demo data now (F-Droid review !45561).
+        composeRule.onNodeWithText("查看演示数据").assertIsDisplayed()
     }
 
     @Test

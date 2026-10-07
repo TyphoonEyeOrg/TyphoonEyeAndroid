@@ -257,4 +257,47 @@
     <string name="oss_jetpack_desc">本地 SQLite 数据库持久化、响应式配置存储与后台 Live 状态定时调度</string>
     <string name="oss_eddsa_desc">用于和风天气 API 的 Ed25519 / EdDSA 密码学数字签名算法实现</string>
     <string name="oss_test_desc">Kotlin Flow 响应式数据流测试库与 Mockito 单元测试模拟框架</string>
+
+    <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
+    <string name="no_data_source_title">此版本未配置实时数据源</string>
+    <string name="no_data_source_body">此版本不含天气 API 密钥，因此无法加载实时台风数据。数据源为可选项，需要自行构建应用时配置。你仍可以使用明确标注的示例数据体验应用。</string>
+    <string name="no_data_source_authority">如需真实台风预警，请以当地气象部门发布为准。</string>
+    <string name="action_view_demo">查看演示数据</string>
+    <string name="action_exit_demo">退出演示</string>
+    <string name="demo_banner_title">示例数据，非真实台风</string>
+    <string name="demo_banner_body">这些台风均为虚构，仅用于展示应用功能，请勿据此做任何防灾决策。</string>
+    <string name="share_demo_prefix">【示例数据，非真实台风】</string>
+    <string name="error_sources_failed">无法从已配置的数据源加载台风数据，请检查网络后重试。</string>
+    <string name="error_details_format">详情：%1$s</string>
+    <string name="source_juhe">聚合数据</string>
+    <string name="source_qweather">和风天气</string>
+    <string name="source_failure_invalid_key">%1$s：API 密钥无效</string>
+    <string name="source_failure_quota">%1$s：调用配额已用尽</string>
+    <string name="source_failure_api">%1$s：服务返回错误（%2$s）</string>
+    <string name="source_failure_network">%1$s：网络请求失败</string>
+    <string name="demo_bavi_position">距离浙闽交界东南方向约890公里（示例）</string>
+    <string name="demo_bavi_forecast">示例预报：将以每小时20–25公里的速度向西北方向移动，强度变化不大。</string>
+    <string name="demo_mekkhala_position">菲律宾以东洋面（示例）</string>
+    <string name="demo_mekkhala_forecast">示例预报：强度维持，总体向西北偏西移动。</string>
+    <string name="demo_alert_sender">台风眼（示例）</string>
+    <string name="demo_alert_red_title">示例提醒：台风红色预警（非真实）</string>
+    <string name="demo_alert_red_body">这是一条测试通知。示例中的台风“巴威”为虚构，并未发布任何真实预警。</string>
+    <string name="demo_alert_red_instruction">遇到真实预警时，请遵从当地政府部门的指引。</string>
+    <string name="demo_alert_orange_title">示例提醒：台风橙色预警（非真实）</string>
+    <string name="demo_alert_orange_body">这是一条用于预览提醒样式的测试通知，并未发布任何真实预警。</string>
+    <string name="alert_guidance_label">防御指南：</string>
+    <string name="alert_issuer_label">发布单位：%1$s</string>
+    <string name="alert_color_red">红色</string>
+    <string name="alert_color_orange">橙色</string>
+    <string name="alert_color_yellow">黄色</string>
+    <string name="alert_color_blue">蓝色</string>
+    <string name="alert_severity_extreme">特别严重</string>
+    <string name="alert_severity_severe">严重</string>
+    <string name="alert_severity_moderate">较重</string>
+    <string name="alert_severity_minor">一般</string>
+    <string name="alert_severity_unknown">未知</string>
+    <string name="alert_summary_format">%1$s%2$s预警</string>
+    <string name="demo_bavi_name">巴威</string>
+    <string name="demo_mekkhala_name">美莎克</string>
+    <string name="demo_hagupit_name">黑格比</string>
 </resources>

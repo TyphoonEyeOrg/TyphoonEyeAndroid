@@ -21,11 +21,17 @@ class LocaleFallbackTest {
         return RuntimeEnvironment.getApplication().getString(R.string.app_name)
     }
 
+    private fun noDataTitleFor(qualifiers: String): String {
+        RuntimeEnvironment.setQualifiers(qualifiers)
+        return RuntimeEnvironment.getApplication().getString(R.string.no_data_source_title)
+    }
+
     @Test
     fun unsupportedLanguages_fallBackToEnglish() {
         assertEquals("Typhoon Eye", appNameFor("de-rDE"))
         assertEquals("Typhoon Eye", appNameFor("fr"))
         assertEquals("Typhoon Eye", appNameFor("ja-rJP"))
+        assertEquals("No live data source in this build", noDataTitleFor("de-rDE"))
     }
 
     @Test
@@ -39,6 +45,7 @@ class LocaleFallbackTest {
         assertEquals("台风眼", appNameFor("zh-rCN"))
         assertEquals("台风眼", appNameFor("zh-rSG"))
         assertEquals("台风眼", appNameFor("zh"))
+        assertEquals("此版本未配置实时数据源", noDataTitleFor("zh-rCN"))
     }
 
     @Test

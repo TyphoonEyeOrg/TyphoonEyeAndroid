@@ -257,4 +257,47 @@
     <string name="oss_jetpack_desc">Local SQLite database persistence, reactive DataStore preferences, and background Live scheduling</string>
     <string name="oss_eddsa_desc">Ed25519 / EdDSA cryptographic signature algorithm implementation for QWeather API</string>
     <string name="oss_test_desc">Testing utility for Kotlin Flows and Mockito unit testing framework</string>
+
+    <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
+    <string name="no_data_source_title">No live data source in this build</string>
+    <string name="no_data_source_body">This build ships without weather API keys, so it can’t load live typhoon data. Data sources are optional and must be added when building the app yourself. You can still explore the app with clearly labeled sample data.</string>
+    <string name="no_data_source_authority">For real typhoon warnings, follow your local meteorological authority.</string>
+    <string name="action_view_demo">View demo data</string>
+    <string name="action_exit_demo">Exit demo</string>
+    <string name="demo_banner_title">Sample data — not real typhoons</string>
+    <string name="demo_banner_body">These storms are fictional and only show how the app works. Do not use them for safety decisions.</string>
+    <string name="share_demo_prefix">[Sample data — not a real typhoon]</string>
+    <string name="error_sources_failed">Couldn’t load typhoon data from the configured sources. Check your connection and try again.</string>
+    <string name="error_details_format">Details: %1$s</string>
+    <string name="source_juhe">Juhe</string>
+    <string name="source_qweather">QWeather</string>
+    <string name="source_failure_invalid_key">%1$s: API key rejected</string>
+    <string name="source_failure_quota">%1$s: quota exceeded</string>
+    <string name="source_failure_api">%1$s: service error (%2$s)</string>
+    <string name="source_failure_network">%1$s: network request failed</string>
+    <string name="demo_bavi_position">About 890 km southeast of the Zhejiang–Fujian border (sample)</string>
+    <string name="demo_bavi_forecast">Sample forecast: moving northwest at 20–25 km/h with little change in intensity.</string>
+    <string name="demo_mekkhala_position">Over the sea east of the Philippines (sample)</string>
+    <string name="demo_mekkhala_forecast">Sample forecast: intensity steady, moving west-northwest.</string>
+    <string name="demo_alert_sender">Typhoon Eye (sample)</string>
+    <string name="demo_alert_red_title">Sample alert: typhoon red warning (not real)</string>
+    <string name="demo_alert_red_body">This is a test notification. Typhoon “Bavi” in this example is fictional; no real warning has been issued.</string>
+    <string name="demo_alert_red_instruction">In a real warning, follow the instructions of your local authorities.</string>
+    <string name="demo_alert_orange_title">Sample alert: typhoon orange warning (not real)</string>
+    <string name="demo_alert_orange_body">This is a test notification for previewing alert styles. No real warning has been issued.</string>
+    <string name="alert_guidance_label">Guidance:</string>
+    <string name="alert_issuer_label">Issued by: %1$s</string>
+    <string name="alert_color_red">Red</string>
+    <string name="alert_color_orange">Orange</string>
+    <string name="alert_color_yellow">Yellow</string>
+    <string name="alert_color_blue">Blue</string>
+    <string name="alert_severity_extreme">Extreme</string>
+    <string name="alert_severity_severe">Severe</string>
+    <string name="alert_severity_moderate">Moderate</string>
+    <string name="alert_severity_minor">Minor</string>
+    <string name="alert_severity_unknown">Unknown</string>
+    <string name="alert_summary_format">%1$s %2$s warning</string>
+    <string name="demo_bavi_name">Bavi</string>
+    <string name="demo_mekkhala_name">Mekkhala</string>
+    <string name="demo_hagupit_name">Hagupit</string>
 </resources>

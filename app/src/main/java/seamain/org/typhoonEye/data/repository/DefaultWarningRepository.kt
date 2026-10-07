@@ -161,29 +161,33 @@ class DefaultWarningRepository @Inject constructor(
         }
     }
 
-    /** Demo / offline sample alerts for preview. */
+    /**
+     * Sample alerts for previewing notification styling (Settings → test alert).
+     * Localized and explicitly marked as not real; never attributed to a real
+     * meteorological agency.
+     */
     override fun demoAlerts(): List<EmergencyAlert> = listOf(
         EmergencyAlert(
             id = "demo-typhoon-red-202609",
-            title = "浙江省气象台发布台风红色预警信号",
-            body = "受台风“巴威”影响，预计未来 24 小时我省沿海将出现 12～14 级大风，请立即进入应急防御状态。",
-            sender = "浙江省气象台",
-            eventName = "台风",
+            title = appContext.getString(R.string.demo_alert_red_title),
+            body = appContext.getString(R.string.demo_alert_red_body),
+            sender = appContext.getString(R.string.demo_alert_sender),
+            eventName = appContext.getString(R.string.intensity_ty),
             severity = AlertSeverity.Extreme,
             colorCode = "red",
-            instruction = "停止户外活动，加固门窗，渔船回港避风，关注后续路径。",
-            source = AlertSource.Official,
+            instruction = appContext.getString(R.string.demo_alert_red_instruction),
+            source = AlertSource.Intensity,
             relatedTyphoonId = "202609"
         ),
         EmergencyAlert(
             id = "demo-typhoon-orange-202609",
-            title = "福建省气象台发布台风橙色预警信号",
-            body = "“巴威”继续向西北移动，我省东部海域将出现 10～12 级大风，请加强防范。",
-            sender = "福建省气象台",
-            eventName = "台风",
+            title = appContext.getString(R.string.demo_alert_orange_title),
+            body = appContext.getString(R.string.demo_alert_orange_body),
+            sender = appContext.getString(R.string.demo_alert_sender),
+            eventName = appContext.getString(R.string.intensity_ty),
             severity = AlertSeverity.Severe,
             colorCode = "orange",
-            source = AlertSource.Official,
+            source = AlertSource.Intensity,
             relatedTyphoonId = "202609"
         )
     )

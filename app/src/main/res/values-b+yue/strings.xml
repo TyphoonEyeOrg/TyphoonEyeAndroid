@@ -253,4 +253,47 @@
     <string name="oss_jetpack_desc">本地 SQLite 數據庫持久化、響應式配置存儲同後台 Live 狀態定時調度</string>
     <string name="oss_eddsa_desc">用於和風天氣 API 嘅 Ed25519 / EdDSA 密碼學數字簽名算法實現</string>
     <string name="oss_test_desc">Kotlin Flow 響應式數據流測試庫同 Mockito 單元測試模擬框架</string>
+
+    <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
+    <string name="no_data_source_title">呢個版本冇設定即時資料來源</string>
+    <string name="no_data_source_body">呢個版本冇包天氣 API 金鑰，所以載入唔到即時颱風資料。資料來源係選用嘅，要自己建置應用程式嗰陣設定。你仲可以用清楚標明嘅範例資料試用。</string>
+    <string name="no_data_source_authority">真實颱風警告請以當地氣象機構發布為準。</string>
+    <string name="action_view_demo">睇示範資料</string>
+    <string name="action_exit_demo">退出示範</string>
+    <string name="demo_banner_title">範例資料，唔係真實颱風</string>
+    <string name="demo_banner_body">呢啲颱風全部係虛構，只係用嚟展示應用程式功能，唔好靠佢做任何防災決定。</string>
+    <string name="share_demo_prefix">【範例資料，唔係真實颱風】</string>
+    <string name="error_sources_failed">已設定嘅資料來源載入唔到颱風資料，請檢查網絡再試。</string>
+    <string name="error_details_format">詳情：%1$s</string>
+    <string name="source_juhe">聚合數據</string>
+    <string name="source_qweather">和風天氣</string>
+    <string name="source_failure_invalid_key">%1$s：API 金鑰無效</string>
+    <string name="source_failure_quota">%1$s：用量配額用晒</string>
+    <string name="source_failure_api">%1$s：服務回傳錯誤（%2$s）</string>
+    <string name="source_failure_network">%1$s：網絡請求失敗</string>
+    <string name="demo_bavi_position">距離浙閩交界東南面約890公里（範例）</string>
+    <string name="demo_bavi_forecast">範例預報：會以每小時20–25公里向西北移動，強度變化唔大。</string>
+    <string name="demo_mekkhala_position">菲律賓以東海面（範例）</string>
+    <string name="demo_mekkhala_forecast">範例預報：強度維持，大致向西北偏西移動。</string>
+    <string name="demo_alert_sender">颱風眼（範例）</string>
+    <string name="demo_alert_red_title">範例提醒：颱風紅色警告（唔係真嘅）</string>
+    <string name="demo_alert_red_body">呢個係測試通知。範例入面嘅颱風「巴威」係虛構，冇發出任何真實警告。</string>
+    <string name="demo_alert_red_instruction">遇到真實警告，請跟當地政府部門嘅指引。</string>
+    <string name="demo_alert_orange_title">範例提醒：颱風橙色警告（唔係真嘅）</string>
+    <string name="demo_alert_orange_body">呢個係用嚟預覽提醒樣式嘅測試通知，冇發出任何真實警告。</string>
+    <string name="alert_guidance_label">防禦指引：</string>
+    <string name="alert_issuer_label">發布單位：%1$s</string>
+    <string name="alert_color_red">紅色</string>
+    <string name="alert_color_orange">橙色</string>
+    <string name="alert_color_yellow">黃色</string>
+    <string name="alert_color_blue">藍色</string>
+    <string name="alert_severity_extreme">特別嚴重</string>
+    <string name="alert_severity_severe">嚴重</string>
+    <string name="alert_severity_moderate">較重</string>
+    <string name="alert_severity_minor">一般</string>
+    <string name="alert_severity_unknown">未知</string>
+    <string name="alert_summary_format">%1$s%2$s警告</string>
+    <string name="demo_bavi_name">巴威</string>
+    <string name="demo_mekkhala_name">米克拉</string>
+    <string name="demo_hagupit_name">黑格比</string>
 </resources>

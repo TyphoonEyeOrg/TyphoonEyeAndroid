@@ -38,8 +38,11 @@ data class TyphoonPoint(
 data class TyphoonFeed(
     val typhoons: List<Typhoon>,
     val fromCache: Boolean = false,
-    /** Non-null only when the network fetch failed and the cache is a fallback. */
-    val staleMessage: String? = null,
+    /**
+     * Non-null only when the network fetch failed and the cache is a fallback.
+     * Typed so the UI can localize it; never shown verbatim.
+     */
+    val staleReason: TyphoonDataError? = null,
     /** When this data was actually fetched from the network (not when it was read). */
     val fetchedAtEpochMs: Long? = null
 )
