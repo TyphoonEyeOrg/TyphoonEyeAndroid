@@ -110,6 +110,17 @@ jobs:
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME (versionCode from version.properties)"
 
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Upload unit test report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+
       - name: Build Debug APK
         if: ${{ inputs.build_type == 'debug' }}
         env:

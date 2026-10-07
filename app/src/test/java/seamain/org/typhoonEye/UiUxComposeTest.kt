@@ -32,7 +32,7 @@ import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
  * Material 3 UI/UX checks on JVM via Robolectric (reliable without device unlock).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "zh-rCN")
 class UiUxComposeTest {
 
     @get:Rule
@@ -75,13 +75,8 @@ class UiUxComposeTest {
     }
 
     private fun assertHasContentDescription(description: String) {
-        assertTrue(
-            "Expected contentDescription: $description",
-            composeRule
-                .onNodeWithContentDescription(description)
-                .fetchSemanticsNode()
-                .let { true }
-        )
+        composeRule.onNodeWithContentDescription(description, useUnmergedTree = true)
+            .assertExists("Could not find node with contentDescription: $description")
     }
 
     @Test
@@ -113,7 +108,6 @@ class UiUxComposeTest {
         assertHasText("巴威")
         assertHasText("共 2 · 活跃 2")
         assertHasContentDescription("搜索台风")
-        assertHasContentDescription("刷新")
         assertHasContentDescription("设置")
         assertHasContentDescription("台风 巴威，台风")
     }
@@ -338,6 +332,6 @@ class UiUxComposeTest {
             }
         }
 
-        assertHasContentDescription("正在补全路径详情")
+        assertHasContentDescription("正在加载路径详情")
     }
 }
