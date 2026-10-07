@@ -1,31 +1,41 @@
 package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
+import seamain.org.typhoonEye.data.sync.FeedSyncStore
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
+import seamain.org.typhoonEye.domain.util.TyphoonActivity
+import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Named
 
 /**
- * Offline-first typhoon repository:
- * 1) Prefer Juhe remote, fallback QWeather
- * 2) On remote success → write Room cache
- * 3) On remote failure → serve Room cache when available
+ * Cache-first typhoon repository:
+ * 1) Active list is served from Room while younger than [LIST_TTL_MS]; pull-to-refresh may
+ *    force a fetch, but no more often than [MIN_FORCE_INTERVAL_MS].
+ * 2) Remote: prefer Juhe, fallback QWeather. A Juhe detail is only re-fetched when the list's
+ *    update time (`endtime`) for that storm changed, so a refresh costs 1 + changed storms.
+ * 3) On remote failure → serve Room cache with a stale message.
+ * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
  */
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
     @Named("juhe_key") private val juheKey: String,
     private val qWeatherAuth: QWeatherAuthInterceptor,
-    private val localDataSource: TyphoonLocalDataSource
+    private val localDataSource: TyphoonLocalDataSource,
+    private val syncStore: FeedSyncStore,
+    private val clock: WallClock
 ) : TyphoonRepository {
 
     private val qWeatherConfigured: Boolean
@@ -33,59 +43,117 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private val tag = "TyphoonRepository"
 
+    /** Serialises list loads so UI + background worker never fetch in parallel. */
+    private val listMutex = Mutex()
+
     private class FetchOutcome(
         val typhoons: List<Typhoon>? = null,
         val error: String? = null
     )
 
-    override suspend fun getActiveTyphoons(): Result<TyphoonFeed> {
-        val remote = fetchRemoteActive()
-        remote.onSuccess { list ->
-            runCatching { localDataSource.replaceAll(list) }
-                .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
-            return Result.success(TyphoonFeed(typhoons = list, fromCache = false))
-        }
-
-        val cached = runCatching { localDataSource.getAll() }.getOrDefault(emptyList())
-        if (cached.isNotEmpty()) {
-            Log.i(tag, "Serving ${cached.size} typhoon(s) from Room cache")
-            return Result.success(
-                TyphoonFeed(
-                    typhoons = cached,
-                    fromCache = true,
-                    staleMessage = remote.exceptionOrNull()?.message
-                )
-            )
-        }
-        return Result.failure(
-            remote.exceptionOrNull()
-                ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+    override suspend fun getCachedFeed(): TyphoonFeed? {
+        val cached = runCatching { localDataSource.getAll() }.getOrNull().orEmpty()
+        val fetchedAt = syncStore.lastListFetchAtMs
+        if (cached.isEmpty() && fetchedAt == null) return null
+        return TyphoonFeed(
+            typhoons = cached.resolved(clock.nowMs()),
+            fromCache = true,
+            fetchedAtEpochMs = fetchedAt ?: latestCachedAt()
         )
     }
 
+    override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> =
+        listMutex.withLock {
+            val now = clock.nowMs()
+            val lastFetch = syncStore.lastListFetchAtMs
+            val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
+            val age = lastFetch?.let { now - it }
+            if (age != null && age >= 0 && age < minAge) {
+                val cached = runCatching { localDataSource.getAll() }.getOrNull()
+                if (cached != null) {
+                    Log.d(tag, "List fresh (${age / 1000}s old), serving Room cache")
+                    return@withLock Result.success(
+                        TyphoonFeed(
+                            typhoons = cached.resolved(now),
+                            fromCache = true,
+                            fetchedAtEpochMs = lastFetch
+                        )
+                    )
+                }
+            }
+
+            val cachedList = runCatching { localDataSource.getAll() }.getOrNull().orEmpty()
+            val remote = fetchRemoteActive(cachedList.associateBy { it.id })
+            remote.onSuccess { list ->
+                runCatching { localDataSource.replaceAll(list) }
+                    .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
+                syncStore.lastListFetchAtMs = now
+                return@withLock Result.success(
+                    TyphoonFeed(typhoons = list.resolved(now), fromCache = false, fetchedAtEpochMs = now)
+                )
+            }
+
+            if (cachedList.isNotEmpty()) {
+                Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache")
+                return@withLock Result.success(
+                    TyphoonFeed(
+                        typhoons = cachedList.resolved(now),
+                        fromCache = true,
+                        staleMessage = remote.exceptionOrNull()?.message
+                            ?: "网络请求失败",
+                        fetchedAtEpochMs = lastFetch ?: latestCachedAt()
+                    )
+                )
+            }
+            Result.failure(
+                remote.exceptionOrNull()
+                    ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+            )
+        }
+
     override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
+        val now = clock.nowMs()
+        val cached = runCatching { localDataSource.getById(id) }.getOrNull()
+        if (cached != null && cached.hasFullDetail()) {
+            val cachedAt = runCatching { localDataSource.getCachedAtMs(id) }.getOrNull()
+            val age = cachedAt?.let { now - it }
+            if (age != null && age >= 0 && age < DETAIL_TTL_MS) {
+                Log.d(tag, "Detail $id fresh (${age / 1000}s old), serving Room cache")
+                return Result.success(TyphoonActivity.resolve(cached, now))
+            }
+        }
+
         val remote = fetchRemoteDetail(id)
         remote.onSuccess { detail ->
             runCatching { localDataSource.upsert(detail) }
                 .onFailure { Log.w(tag, "Failed to cache typhoon detail $id", it) }
-            return Result.success(detail)
+            return Result.success(TyphoonActivity.resolve(detail, now))
         }
 
-        val cached = runCatching { localDataSource.getById(id) }.getOrNull()
         if (cached != null) {
             Log.i(tag, "Serving typhoon detail $id from Room cache")
-            return Result.success(cached)
+            return Result.success(TyphoonActivity.resolve(cached, now))
         }
         return remote
     }
 
-    private suspend fun fetchRemoteActive(): Result<List<Typhoon>> {
+    private fun List<Typhoon>.resolved(now: Long): List<Typhoon> =
+        map { TyphoonActivity.resolve(it, now) }
+
+    private suspend fun latestCachedAt(): Long? =
+        runCatching { localDataSource.latestCachedAtMs() }.getOrNull()
+
+    /** A list-only snapshot has a single synthesized point and no forecast. */
+    private fun Typhoon.hasFullDetail(): Boolean =
+        points.size > 1 || forecastPoints.isNotEmpty()
+
+    private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
         val errors = ArrayList<String>()
 
         if (juheKey.isBlank()) {
             errors.add("聚合 JUHE_KEY 未配置")
         } else {
-            val juhe = fetchFromJuhe()
+            val juhe = fetchFromJuhe(cachedById)
             val data = juhe.typhoons
             if (data != null) {
                 return Result.success(data)
@@ -161,7 +229,7 @@ class DefaultTyphoonRepository @Inject constructor(
         return Result.failure(Exception("无法获取台风详情: $id"))
     }
 
-    private suspend fun fetchFromJuhe(): FetchOutcome {
+    private suspend fun fetchFromJuhe(cachedById: Map<String, Typhoon>): FetchOutcome {
         return try {
             val listResponse = juheApi.getActiveTyphoons(juheKey)
             when (listResponse.errorCode) {
@@ -171,11 +239,23 @@ class DefaultTyphoonRepository @Inject constructor(
                         Log.d(tag, "Juhe: no active typhoons")
                         return FetchOutcome(typhoons = emptyList())
                     }
+                    var reused = 0
                     val typhoons = active.map { info ->
+                        val cached = cachedById[info.tfid]
+                        if (cached != null && info.endtime.isNotBlank() &&
+                            cached.endTime == info.endtime && cached.hasFullDetail()
+                        ) {
+                            // Same storm, same list update time → detail unchanged; skip the call.
+                            reused++
+                            return@map cached
+                        }
                         try {
                             val detail = juheApi.getTyphoonDetail(juheKey, info.tfid)
                             if (detail.errorCode == 0 && detail.result?.data != null) {
-                                detail.result.data.toDomain()
+                                // Key the cached detail by the list's update time.
+                                detail.result.data.toDomain().let {
+                                    if (info.endtime.isNotBlank()) it.copy(endTime = info.endtime) else it
+                                }
                             } else {
                                 info.toDomain()
                             }
@@ -184,7 +264,7 @@ class DefaultTyphoonRepository @Inject constructor(
                             info.toDomain()
                         }
                     }
-                    Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe")
+                    Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe, reused $reused cached detail(s)")
                     FetchOutcome(typhoons = typhoons)
                 }
                 10001, 10002 -> {
@@ -240,5 +320,11 @@ class DefaultTyphoonRepository @Inject constructor(
             Log.e(tag, "QWeather request failed", e)
             FetchOutcome(error = "和风请求失败: ${e.message}")
         }
+    }
+
+    companion object {
+        const val LIST_TTL_MS: Long = 10L * 60 * 1000
+        const val MIN_FORCE_INTERVAL_MS: Long = 60L * 1000
+        const val DETAIL_TTL_MS: Long = 30L * 60 * 1000
     }
 }

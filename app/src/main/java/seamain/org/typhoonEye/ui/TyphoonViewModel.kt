@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ import seamain.org.typhoonEye.data.update.AppUpdateRepository
 import seamain.org.typhoonEye.domain.model.AppUpdateInfo
 import seamain.org.typhoonEye.domain.model.AppUpdateState
 import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
@@ -138,7 +140,7 @@ class TyphoonViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
-        refresh()
+        loadTyphoons(forceRefresh = false)
         // Quiet daily GitHub Releases check (disabled on F-Droid flavor).
         if (DistributionConfig.enableInAppUpdates(appContext)) {
             viewModelScope.launch {
@@ -153,8 +155,15 @@ class TyphoonViewModel @Inject constructor(
                 // Alerts first, then Live — so Live stays out of Alerting aggregate and stays current.
                 refreshEmergencyAlerts(active, prefs.emergencyAlertsEnabled)
                 liveNotifier.update(active, prefs.liveActivityEnabled)
-                syncBackgroundWorker(prefs.liveActivityEnabled || prefs.emergencyAlertsEnabled)
             }
+        }
+        // (Re)schedule the worker only when the Live / alert toggles actually change,
+        // not on every data or settings emission.
+        viewModelScope.launch {
+            preferences.settings
+                .map { it.liveActivityEnabled || it.emergencyAlertsEnabled }
+                .distinctUntilChanged()
+                .collect { enabled -> syncBackgroundWorker(enabled) }
         }
     }
 
@@ -347,36 +356,29 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh / retry: forces a fetch unless the last one was under 60 s ago. */
     fun refresh() {
+        loadTyphoons(forceRefresh = true)
+    }
+
+    private fun loadTyphoons(forceRefresh: Boolean) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
+            // Stale-while-revalidate: paint the Room cache first, then let the repository
+            // decide (by TTL) whether a network fetch is needed.
+            if (_uiState.value !is TyphoonUiState.Success) {
+                repository.getCachedFeed()
+                    ?.takeIf { it.typhoons.isNotEmpty() }
+                    ?.let { applyFeed(it) }
+            }
             val hadData = _uiState.value is TyphoonUiState.Success
             _isRefreshing.value = true
             if (!hadData) {
                 _uiState.value = TyphoonUiState.Loading
             }
 
-            repository.getActiveTyphoons()
-                .onSuccess { feed ->
-                    _allTyphoons.value = feed.typhoons
-                    _uiState.value = TyphoonUiState.Success(
-                        typhoons = feed.typhoons,
-                        fromCache = feed.fromCache,
-                        staleMessage = feed.staleMessage
-                    )
-                    _dataMode.value = DataMode.Live
-                    _lastUpdatedAtMs.value = System.currentTimeMillis()
-                    _selectedTyphoon.value?.let { selected ->
-                        val fromFeed = feed.typhoons.find { typhoonIdsMatch(it.id, selected.id) }
-                        _selectedTyphoon.value = when {
-                            // Keep in-memory detail if the list snapshot is thinner.
-                            fromFeed == null -> selected
-                            selected.points.size > fromFeed.points.size -> selected
-                            // Preserve the id the user navigated with (Juhe vs NP_*).
-                            else -> fromFeed.copy(id = selected.id)
-                        }
-                    }
-                }
+            repository.getActiveTyphoons(forceRefresh = forceRefresh)
+                .onSuccess { feed -> applyFeed(feed) }
                 .onFailure { error ->
                     if (!hadData) {
                         _uiState.value = TyphoonUiState.Error(
@@ -385,6 +387,28 @@ class TyphoonViewModel @Inject constructor(
                     }
                 }
             _isRefreshing.value = false
+        }
+    }
+
+    private fun applyFeed(feed: TyphoonFeed) {
+        _allTyphoons.value = feed.typhoons
+        _uiState.value = TyphoonUiState.Success(
+            typhoons = feed.typhoons,
+            fromCache = feed.fromCache,
+            staleMessage = feed.staleMessage
+        )
+        _dataMode.value = DataMode.Live
+        // Real fetch time, not "now" — cached data must not look freshly fetched.
+        _lastUpdatedAtMs.value = feed.fetchedAtEpochMs
+        _selectedTyphoon.value?.let { selected ->
+            val fromFeed = feed.typhoons.find { typhoonIdsMatch(it.id, selected.id) }
+            _selectedTyphoon.value = when {
+                // Keep in-memory detail if the list snapshot is thinner.
+                fromFeed == null -> selected
+                selected.points.size > fromFeed.points.size -> selected
+                // Preserve the id the user navigated with (Juhe vs NP_*).
+                else -> fromFeed.copy(id = selected.id)
+            }
         }
     }
 
