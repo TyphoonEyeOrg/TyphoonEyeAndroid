@@ -227,15 +227,6 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { test ->
-            // CI passes -PexcludeTests=<pattern>[,<pattern>] to skip known failures.
-            // Currently UiUxComposeTest (#4, Robolectric locale); drop once fixed.
-            (project.findProperty("excludeTests") as String?)
-                ?.split(',')
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.forEach { test.filter.excludeTestsMatching(it) }
-        }
     }
 
     // GitHub edition ships per-ABI APKs plus one universal fallback (TYP-5).
