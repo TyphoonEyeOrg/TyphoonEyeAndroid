@@ -3,6 +3,7 @@ package seamain.org.typhoonEye
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -10,6 +11,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
@@ -29,8 +31,11 @@ import seamain.org.typhoonEye.data.model.QWeatherStormListResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
+import seamain.org.typhoonEye.data.sync.FeedSyncStore
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.util.TyphoonActivity
+import seamain.org.typhoonEye.domain.util.WallClock
 
 class TyphoonRepositoryTest {
 
@@ -39,6 +44,11 @@ class TyphoonRepositoryTest {
     private lateinit var localDataSource: TyphoonLocalDataSource
     private lateinit var repository: DefaultTyphoonRepository
     private val juheKey = "juhe_key"
+    private lateinit var syncStore: FakeSyncStore
+    private var nowMs: Long = 0L
+    private val clock = WallClock { nowMs }
+
+    private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
 
     private fun auth(configured: Boolean = true): QWeatherAuthInterceptor =
         if (configured) {
@@ -52,12 +62,17 @@ class TyphoonRepositoryTest {
         juheApi = mock()
         qWeatherApi = mock()
         localDataSource = mock()
+        syncStore = FakeSyncStore()
+        // 2026-07-10 15:00 Beijing — one hour after the fixtures' latest observation.
+        nowMs = TyphoonActivity.parseEpochMs("2026-07-10 15:00:00")!!
         repository = DefaultTyphoonRepository(
             juheApi = juheApi,
             qWeatherApi = qWeatherApi,
             juheKey = juheKey,
             qWeatherAuth = auth(configured = true),
-            localDataSource = localDataSource
+            localDataSource = localDataSource,
+            syncStore = syncStore,
+            clock = clock
         )
     }
 
@@ -209,7 +224,9 @@ class TyphoonRepositoryTest {
             qWeatherApi = qWeatherApi,
             juheKey = "",
             qWeatherAuth = auth(configured = false),
-            localDataSource = localDataSource
+            localDataSource = localDataSource,
+            syncStore = syncStore,
+            clock = clock
         )
         whenever(localDataSource.getAll()).thenReturn(emptyList())
 
@@ -288,4 +305,241 @@ class TyphoonRepositoryTest {
         assertEquals("巴威", result.getOrNull()?.name)
         verify(localDataSource).getById("202609")
     }
+
+    // region Freshness (TYP-51)
+
+    private val listMinute = 60_000L
+
+    private fun juheInfo(tfid: String, endtime: String) = JuheActiveTyphoon(
+        tfid = tfid,
+        name = "巴威",
+        enname = "BAVI",
+        starttime = "2026-07-02 08:00:00",
+        endtime = endtime,
+        lat = "21.80",
+        lng = "126.90",
+        strong = "台风"
+    )
+
+    private fun juheDetail(tfid: String, vararg times: String) = JuheDetailResponse(
+        reason = "success",
+        errorCode = 0,
+        result = JuheDetailResult(
+            data = JuheDetailData(
+                tfid = tfid,
+                name = "巴威",
+                enname = "BAVI",
+                strong = "台风",
+                points = times.map {
+                    JuheTrackPoint(time = it, lat = "21.8", lng = "126.9", speed = "40", pressure = "960")
+                }
+            )
+        )
+    )
+
+    private fun fullCached(id: String, endTime: String) = Typhoon(
+        id = id,
+        name = "巴威",
+        englishName = "BAVI",
+        status = "active",
+        endTime = endTime,
+        points = listOf(
+            TyphoonPoint("2026-07-10 08:00", 20.5, 128.0, 965, 38, "12", "台风"),
+            TyphoonPoint("2026-07-10 14:00", 21.8, 126.9, 960, 40, "13", "台风")
+        )
+    )
+
+    @Test
+    fun `fresh list within 10 minutes is served from Room without network`() = runTest {
+        syncStore.lastListFetchAtMs = nowMs - 9 * listMinute
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.fromCache)
+        assertNull(feed.staleMessage)
+        assertEquals(nowMs - 9 * listMinute, feed.fetchedAtEpochMs)
+        assertEquals(1, feed.typhoons.size)
+        verify(juheApi, never()).getActiveTyphoons(any())
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
+
+    @Test
+    fun `stale list after 10 minutes fetches and records fetch time`() = runTest {
+        syncStore.lastListFetchAtMs = nowMs - 11 * listMinute
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
+        )
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertFalse(feed.fromCache)
+        assertEquals(nowMs, feed.fetchedAtEpochMs)
+        assertEquals(nowMs, syncStore.lastListFetchAtMs)
+        verify(juheApi).getActiveTyphoons(juheKey)
+    }
+
+    @Test
+    fun `empty fresh list is also cached so no-storm periods do not refetch`() = runTest {
+        syncStore.lastListFetchAtMs = nowMs - 2 * listMinute
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.typhoons.isEmpty())
+        verify(juheApi, never()).getActiveTyphoons(any())
+    }
+
+    @Test
+    fun `force refresh within 60 seconds is throttled to cache`() = runTest {
+        syncStore.lastListFetchAtMs = nowMs - 30_000L
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        verify(juheApi, never()).getActiveTyphoons(any())
+    }
+
+    @Test
+    fun `force refresh after 60 seconds bypasses the 10 minute TTL`() = runTest {
+        syncStore.lastListFetchAtMs = nowMs - 2 * listMinute
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
+        )
+
+        val feed = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        assertFalse(feed.fromCache)
+        verify(juheApi).getActiveTyphoons(juheKey)
+    }
+
+    @Test
+    fun `detail is not refetched when list update time is unchanged`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(
+            listOf(fullCached("202609", "2026-07-10 14:00:00"), fullCached("202610", "2026-07-10 08:00:00"))
+        )
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(
+                reason = "success",
+                errorCode = 0,
+                result = JuheActiveListResult(
+                    listOf(
+                        juheInfo("202609", "2026-07-10 14:00:00"), // unchanged
+                        juheInfo("202610", "2026-07-10 14:00:00"), // new advisory
+                        juheInfo("202611", "2026-07-10 14:00:00") // not cached yet
+                    )
+                )
+            )
+        )
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202610")))
+            .thenReturn(juheDetail("202610", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202611")))
+            .thenReturn(juheDetail("202611", "2026-07-10 14:00:00"))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertEquals(3, feed.typhoons.size)
+        verify(juheApi, never()).getTyphoonDetail(juheKey, "202609")
+        verify(juheApi).getTyphoonDetail(juheKey, "202610")
+        verify(juheApi).getTyphoonDetail(juheKey, "202611")
+        verify(juheApi, times(2)).getTyphoonDetail(any(), any())
+        // Fresh details are keyed by the list's update time.
+        assertEquals("2026-07-10 14:00:00", feed.typhoons.first { it.id == "202610" }.endTime)
+    }
+
+    @Test
+    fun `list-only snapshot in cache does not suppress the detail fetch`() = runTest {
+        val thin = fullCached("202609", "2026-07-10 14:00:00").let { it.copy(points = it.points.take(1)) }
+        whenever(localDataSource.getAll()).thenReturn(listOf(thin))
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(
+                reason = "success",
+                errorCode = 0,
+                result = JuheActiveListResult(listOf(juheInfo("202609", "2026-07-10 14:00:00")))
+            )
+        )
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609")))
+            .thenReturn(juheDetail("202609", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
+
+        repository.getActiveTyphoons().getOrThrow()
+
+        verify(juheApi).getTyphoonDetail(juheKey, "202609")
+    }
+
+    @Test
+    fun `remote storm without observation for over 24h is reported dissipated`() = runTest {
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(
+                reason = "success",
+                errorCode = 0,
+                result = JuheActiveListResult(
+                    listOf(juheInfo("202609", "2026-07-10 14:00:00"), juheInfo("2026D07", "2026-07-09 14:00:00"))
+                )
+            )
+        )
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609")))
+            .thenReturn(juheDetail("202609", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("2026D07")))
+            .thenReturn(juheDetail("2026D07", "2026-07-09 08:00:00", "2026-07-09 14:00:00"))
+
+        val byId = repository.getActiveTyphoons().getOrThrow().typhoons.associateBy { it.id }
+
+        assertEquals("active", byId.getValue("202609").status)
+        assertEquals("dissipated", byId.getValue("2026D07").status)
+    }
+
+    @Test
+    fun `cached feed reports real fetch time and re-resolves status with current clock`() = runTest {
+        val fetchedAt = nowMs - 5 * listMinute
+        syncStore.lastListFetchAtMs = fetchedAt
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        nowMs += 25 * 60 * listMinute // 25 h later the same cache row is no longer active
+
+        val feed = repository.getCachedFeed()!!
+
+        assertTrue(feed.fromCache)
+        assertEquals(fetchedAt, feed.fetchedAtEpochMs)
+        assertEquals("dissipated", feed.typhoons.single().status)
+    }
+
+    @Test
+    fun `remote failure falls back to cache with stale message and last fetch time`() = runTest {
+        val fetchedAt = nowMs - 3 * 60 * listMinute
+        syncStore.lastListFetchAtMs = fetchedAt
+        whenever(juheApi.getActiveTyphoons(any())).thenThrow(RuntimeException("network down"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenThrow(RuntimeException("network down"))
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.fromCache)
+        assertTrue(feed.staleMessage?.isNotBlank() == true)
+        assertEquals(fetchedAt, feed.fetchedAtEpochMs)
+        assertEquals(fetchedAt, syncStore.lastListFetchAtMs)
+    }
+
+    @Test
+    fun `fresh full detail is served from cache without network`() = runTest {
+        whenever(localDataSource.getById("202609")).thenReturn(fullCached("202609", "2026-07-10 14:00:00"))
+        whenever(localDataSource.getCachedAtMs("202609")).thenReturn(nowMs - 10 * listMinute)
+
+        val result = repository.getTyphoonDetail("202609")
+
+        assertTrue(result.isSuccess)
+        verify(juheApi, never()).getTyphoonDetail(any(), any())
+    }
+
+    @Test
+    fun `detail older than 30 minutes is refetched`() = runTest {
+        whenever(localDataSource.getById("202609")).thenReturn(fullCached("202609", "2026-07-10 14:00:00"))
+        whenever(localDataSource.getCachedAtMs("202609")).thenReturn(nowMs - 31 * listMinute)
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609")))
+            .thenReturn(juheDetail("202609", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
+
+        repository.getTyphoonDetail("202609").getOrThrow()
+
+        verify(juheApi).getTyphoonDetail(juheKey, "202609")
+    }
+
+    // endregion
 }

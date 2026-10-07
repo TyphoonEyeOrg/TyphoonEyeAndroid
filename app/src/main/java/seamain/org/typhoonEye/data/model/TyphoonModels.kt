@@ -226,6 +226,8 @@ fun QWeatherWindRadius?.toPipeString(): String {
     return listOf(neRadius, seRadius, swRadius, nwRadius).joinToString("|")
 }
 
+// Juhe has no per-storm active flag: mappers report "active" and DefaultTyphoonRepository
+// downgrades storms without an observation in 24 h (TyphoonActivity.resolve).
 fun JuheActiveTyphoon.toDomain(points: List<TyphoonPoint> = emptyList(), forecastPoints: List<TyphoonPoint> = emptyList()): Typhoon {
     val currentPoint = if (points.isEmpty() && lat.isNotBlank()) {
         listOf(
