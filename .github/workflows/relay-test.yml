@@ -1,0 +1,46 @@
+name: Relay tests
+
+on:
+  pull_request:
+  push:
+    branches: [foss, master]
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    name: Relay typecheck & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Skip when there is no relay
+        id: has_relay
+        working-directory: .
+        run: |
+          if [ -f relay/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Set up Node.js
+        if: steps.has_relay.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+
+      - name: Install dependencies
+        if: steps.has_relay.outputs.present == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        if: steps.has_relay.outputs.present == 'true'
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        if: steps.has_relay.outputs.present == 'true'
+        run: npx vitest run
