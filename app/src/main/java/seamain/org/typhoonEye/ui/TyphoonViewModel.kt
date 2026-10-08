@@ -47,6 +47,7 @@ import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatObservationTime
+import seamain.org.typhoonEye.ui.util.localizeIntensityLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -546,12 +547,22 @@ class TyphoonViewModel @Inject constructor(
                 // Never let a fictional storm be forwarded as if it were real.
                 appendLine(appContext.getString(R.string.share_demo_prefix))
             }
+            val en = typhoon.englishName.trim()
             appendLine(
-                appContext.getString(R.string.share_header, typhoon.name, typhoon.englishName)
+                if (en.isBlank() || en.equals(typhoon.name.trim(), ignoreCase = true)) {
+                    appContext.getString(R.string.share_header_name_only, typhoon.name)
+                } else {
+                    appContext.getString(R.string.share_header, typhoon.name, en)
+                }
             )
             appendLine(appContext.getString(R.string.share_id, typhoon.id))
             if (typhoon.strong.isNotBlank()) {
-                appendLine(appContext.getString(R.string.share_intensity, typhoon.strong))
+                appendLine(
+                    appContext.getString(
+                        R.string.share_intensity,
+                        localizeIntensityLabel(appContext, typhoon.strong)
+                    )
+                )
             }
             if (typhoon.positionDesc.isNotBlank()) {
                 appendLine(appContext.getString(R.string.share_position, typhoon.positionDesc))

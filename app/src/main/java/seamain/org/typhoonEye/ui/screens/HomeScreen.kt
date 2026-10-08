@@ -108,6 +108,7 @@ import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.formatPressure
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.latestPoint
+import seamain.org.typhoonEye.ui.util.listSubtitle
 import seamain.org.typhoonEye.ui.util.localizedLabel
 import seamain.org.typhoonEye.ui.util.moveLabel
 
@@ -563,12 +564,7 @@ fun TyphoonListCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        val subtitle = buildList {
-                            if (typhoon.englishName.isNotBlank() && typhoon.englishName != typhoon.name) {
-                                add(typhoon.englishName)
-                            }
-                            add(typhoon.id)
-                        }.joinToString(" · ")
+                        val subtitle = typhoon.listSubtitle()
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
