@@ -1,0 +1,135 @@
+# TyphoonEye relay
+
+Cloudflare Worker used by the **F-Droid build** (`fdroid` flavor) of TyphoonEye.
+It is reached at `https://te-relay.seamain.org` (hard-coded as `RELAY_BASE_URL` in
+`app/build.gradle.kts`). The GitHub build does not use it.
+
+- **Keys stay here.** Juhe / QWeather API keys are Worker secrets. The app contains none.
+- **Allowlist only.** Exactly the provider calls the app makes, with validated parameters.
+  Responses are the providers' JSON, unchanged, so the app parses them with the same code
+  as the GitHub build.
+- **Shared cache.** Lists 10 min, details / track / forecast 30 min (same as the app's own
+  TTLs, TYP-51). Edge cache per Cloudflare location, then KV (global), then the provider.
+  Only successful provider answers are stored in KV; error answers are cached for 60 s.
+- **No user locations.** A cron job fetches typhoon-related official warnings for a fixed
+  list of coastal points ([`data/coastal-points.json`](data/coastal-points.json), 54
+  points: coastal mainland China, Hong Kong, Macau, Taiwan, Philippines, Japan, Korea,
+  Vietnam). Every app downloads the same list and picks nearby points on the device.
+- **No logs.** Observability and Logpush are off; the code logs nothing. The client IP is
+  used only as a rate-limit key (salted SHA-256, never stored by the relay) and is never
+  forwarded: upstream requests are built from scratch with the relay's own headers.
+
+Licensed under the Apache License 2.0, like the app.
+
+## Endpoints
+
+All `GET`; anything else is `405`, unknown paths `404`, invalid parameters `400`.
+Unknown query parameters are ignored (not forwarded, not part of the cache key).
+
+| Relay path | Upstream | Validation | Cache |
+|---|---|---|---|
+| `/v1/juhe/fapigw/typhoon/active` | `https://apis.juhe.cn/fapigw/typhoon/active?key=…` | – | 10 min |
+| `/v1/juhe/fapigw/typhoon/detail?tfid=` | `…/fapigw/typhoon/detail?key=…&tfid=` | `^\d{4}[A-Z]?\d{2}$` | 30 min |
+| `/v1/qweather/v7/tropical/storm-list?basin=NP&year=` | `{QWEATHER_HOST}/v7/tropical/storm-list` | basin `NP`, year 2000…next year | 10 min |
+| `/v1/qweather/v7/tropical/storm-track?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-track` | `^NP_[0-9A-Z]{4}$` | 30 min |
+| `/v1/qweather/v7/tropical/storm-forecast?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-forecast` | `^NP_[0-9A-Z]{4}$` | 30 min |
+| `/v1/alerts` | KV (written by the cron job) | – | 5 min |
+| `/v1/health` | – (`{ok, sources:{juhe,qweather}, alertsUpdatedAtMs}`) | – | 1 min |
+
+Relay status codes: `429` rate limited (`Retry-After: 60`), `502` provider unreachable or
+provider 5xx, `503` that provider has no secret configured. Provider 4xx answers and
+provider-level errors (Juhe `error_code`, QWeather `code`) are passed through unchanged.
+
+`/v1/alerts` response:
+
+```json
+{
+  "version": 1,
+  "updatedAtMs": 1791421200000,
+  "points": [
+    { "id": "cn-shenzhen", "name": "深圳", "lat": 22.54, "lon": 114.06,
+      "alerts": [ /* QWeather weatheralert objects, unchanged, typhoon-related only, not expired */ ] }
+  ]
+}
+```
+
+Only points that currently have alerts are listed. `updatedAtMs: 0` means the cron job has
+not run yet. The app ignores a list older than 6 hours and, with location, uses points
+within 150 km of the user (all points without location).
+
+## Cron job and provider cost
+
+Every 15 minutes (`[triggers] crons` in `wrangler.toml`):
+
+1. Get the active-storm list through the same cache the app uses (Juhe if `JUHE_KEY` is set,
+   else QWeather storm-list). **No active storm → no alert calls**, an empty list is stored.
+2. With storm positions (Juhe), query only points within `ALERT_STORM_RADIUS_KM` (1500 km)
+   of a storm; without positions (QWeather only), all 54 points.
+3. At most `MAX_ALERT_POINTS_PER_RUN` (40) points per run, rotating, so a run stays under
+   the Workers Free plan limit of 50 subrequests. A point not re-queried keeps its last
+   answer for up to 2 hours.
+4. If every alert query fails, the previous list is kept.
+
+QWeather weather-alert calls (worst case, all points every run while a storm is active):
+40 × 96 runs/day = 3,840/day. QWeather prices warnings in the "weather and basic services"
+group: first 50,000 requests/month free, then CNY 0.0007 per request (2025 price list),
+i.e. about 13 full storm-days per month free and ≈ CNY 2.7 per storm-day after that.
+With Juhe positions and a single storm, typically 10–30 points are in range.
+Typhoon (tropical) calls are priced separately by QWeather (no free tier, CNY 0.003 per
+request); the shared cache keeps those to roughly 1 list call per 10 min plus 2 calls per
+active storm per 30 min, independent of the number of users.
+
+## Deploy (owner, once)
+
+Requires a Cloudflare account with `seamain.org` on Cloudflare DNS, Node.js 20+.
+
+```bash
+cd relay
+npm ci
+npx wrangler login                     # opens a browser; owner's Cloudflare account
+
+# 1. KV namespace → paste the printed id into wrangler.toml ([[kv_namespaces]] id)
+npx wrangler kv namespace create RELAY_KV
+
+# 2. Secrets (prompted, never written to disk or the repo). Set what you have:
+npx wrangler secret put JUHE_KEY
+npx wrangler secret put QWEATHER_API_KEY
+npx wrangler secret put QWEATHER_HOST           # e.g. abc123xyz.re.qweatherapi.com
+#   optional instead of QWEATHER_API_KEY (JWT):
+#   npx wrangler secret put QWEATHER_KID
+#   npx wrangler secret put QWEATHER_PROJECT_ID
+#   npx wrangler secret put QWEATHER_PRIVATE_KEY  # PKCS#8 PEM
+#   optional: npx wrangler secret put IP_HASH_SALT  # any random string
+
+# 3. Deploy. The custom domain te-relay.seamain.org (DNS record + certificate) is created
+#    from the `routes` entry in wrangler.toml.
+npx wrangler deploy
+
+# 4. Check
+curl https://te-relay.seamain.org/v1/health
+curl "https://te-relay.seamain.org/v1/juhe/fapigw/typhoon/active"
+curl https://te-relay.seamain.org/v1/alerts      # updatedAtMs > 0 after the first cron run
+```
+
+Notes:
+
+- `te-relay.seamain.org` is a first-level subdomain, so the Universal SSL certificate
+  covers it. If a DNS record with that name already exists, remove it first.
+- `workers_dev = false`: no `*.workers.dev` URL (often unreachable from mainland China).
+- The rate-limit `namespace_id`s (`41001`, `41002`) must be unique in the account.
+- Limits per client and Cloudflare location: 120 requests/min overall, 20/min that reach a
+  provider. Mobile carrier NAT can put many users behind one IP; raise if needed.
+- Rotate a key: `npx wrangler secret put JUHE_KEY` again (takes effect immediately).
+- In the Cloudflare dashboard, keep Workers Logs / Logpush off for this Worker.
+
+## Develop and test
+
+```bash
+npm ci
+npm test            # vitest, upstream fetch / KV / cache / rate limiter are mocked
+npm run typecheck
+cp .dev.vars.example .dev.vars && npx wrangler dev --local   # dummy secrets only
+```
+
+`node_modules/`, `.wrangler/` and `.dev.vars` are git-ignored. This directory is not part of
+the Gradle build, so F-Droid's Android build does not use it.

@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `wrangler dev --local` (never commit .dev.vars).
+# Dummy values only; real keys go in with `wrangler secret put`.
+JUHE_KEY=dummy-juhe-key
+QWEATHER_API_KEY=dummy-qweather-key
+QWEATHER_HOST=example.re.qweatherapi.com

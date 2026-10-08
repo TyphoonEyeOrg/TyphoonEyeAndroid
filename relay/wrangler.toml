@@ -1,0 +1,54 @@
+# TyphoonEye relay (F-Droid build). See README.md for the deploy steps.
+# No secrets in this file: API keys are Worker secrets (`wrangler secret put …`).
+name = "typhooneye-relay"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# Only reachable on our own subdomain (one level under seamain.org, so Universal SSL
+# covers it). No *.workers.dev URL: it is often unreachable from mainland China.
+workers_dev = false
+preview_urls = false
+# No Logpush either (see [observability] below).
+logpush = false
+routes = [
+  { pattern = "te-relay.seamain.org", custom_domain = true }
+]
+
+# Refresh the shared typhoon-warning list every 15 minutes.
+[triggers]
+crons = ["*/15 * * * *"]
+
+# No request logs or traces: the relay must not keep IPs or query parameters.
+[observability]
+enabled = false
+
+# Shared response cache + the warning list written by the cron job.
+# Create with `npx wrangler kv namespace create RELAY_KV` and paste the id here.
+[[kv_namespaces]]
+binding = "RELAY_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Per client (salted hash of the IP), counted per Cloudflare location.
+# Generous on purpose: many mobile users in China share one carrier-NAT IP.
+[[ratelimits]]
+name = "RL_REQUESTS"
+namespace_id = "41001"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Requests that would reach a weather provider (both cache layers missed).
+[[ratelimits]]
+name = "RL_UPSTREAM"
+namespace_id = "41002"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[vars]
+# Cron: only coastal points within this distance of an active storm are queried
+# (when storm positions are known; otherwise all points).
+ALERT_STORM_RADIUS_KM = "1500"
+# Cron: at most this many points per run (rotating). Keeps a run under the
+# 50-subrequest limit of the Workers Free plan.
+MAX_ALERT_POINTS_PER_RUN = "40"
