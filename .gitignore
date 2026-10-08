@@ -68,3 +68,6 @@ postman/
 
 # Temporary / scratch
 tmp/
+
+# Output of scripts/build-github.sh and scripts/build-foss.sh
+dist/
