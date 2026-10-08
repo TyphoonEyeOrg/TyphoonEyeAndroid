@@ -3,7 +3,6 @@ import { secondsUntilLocalMidnight } from "./clock";
 import type { Deps, Env } from "./env";
 import { checkKnown } from "./guard";
 import { errorResponse, jsonResponse } from "./http";
-import { inBackground } from "./kv";
 import { cacheKey, type UpstreamRoute } from "./routes";
 import { edgeMatch, edgePut, fetchAndStore, readFresh, readStored } from "./store";
 import { sourceConfigured } from "./upstream";
@@ -88,12 +87,7 @@ export async function proxy(route: UpstreamRoute, env: Env, deps: Deps, clientKe
   }
 
   const budget = await UpstreamBudget.load(route.source, env, now);
-  try {
-    return await fromProvider(route, env, deps, budget, now);
-  } finally {
-    // At most one counter write per request, after the response when possible.
-    await inBackground(deps, budget.flush());
-  }
+  return fromProvider(route, env, deps, budget, now);
 }
 
 /**

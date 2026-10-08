@@ -40,7 +40,7 @@ describe("best-effort KV on the request path", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=1800");
-    expect(kv.failedPuts).toBe(2); // the detail and the budget counter
+    expect(kv.failedPuts).toBe(1); // the detail (budget counts are batched in memory)
     // Minimal log line: nothing about the request.
     expect(warn).toHaveBeenCalledWith("relay: KV write failed");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("202609");
@@ -92,11 +92,11 @@ describe("best-effort KV on the request path", () => {
     const res = await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-track?stormid=NP_2609"), makeEnv({ RELAY_KV: kv }), deps);
 
     expect(res.status).toBe(200);
-    expect(pending).toHaveLength(2); // cache write + budget counter
+    expect(pending).toHaveLength(1); // cache write (budget counts are batched in memory)
     expect(kv.store.size).toBe(1); // only the seeded list: response did not wait for KV
     release();
     await Promise.all(pending);
-    expect(kv.store.size).toBe(3);
+    expect(kv.store.size).toBe(2);
   });
 });
 

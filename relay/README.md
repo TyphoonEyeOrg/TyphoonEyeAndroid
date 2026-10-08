@@ -100,9 +100,17 @@ single client (or a bug) can make it spend:
    keeps answers for 6 h for this) or `503 budget_exhausted` with `Retry-After` until
    midnight; the cron job skips its run and never queries more points than remain.
    QWeather's budget covers the cron's weather-alert calls too (up to 1,920/day).
-   Best effort: KV has no atomic increment and is eventually consistent, so concurrent
-   requests may undercount a little, and if KV fails the relay **fails open** (serves the
-   request, logs `relay: KV read failed` / `write failed`, nothing else).
+   **Batched per isolate** to keep KV writes low: each Worker isolate counts its calls in
+   memory and merges them into KV (read, add, write, after the response) once it has
+   **20 calls pending or 5 minutes have passed** since its last flush; the cron job flushes
+   at the end of every run. The check is the last KV value the isolate read (re-read at
+   most once a minute) plus its own pending calls. It is a backstop, not an exact meter:
+   isolates don't see each other's pending calls and concurrent merges can lose
+   increments, so **some overshoot is possible**; counts still in memory when an isolate is
+   evicted are lost; at 00:00 UTC+8 the previous day's pending calls are dropped (that
+   counter is never read again). If KV fails the relay **fails open**: requests are served,
+   the pending calls are kept and retried at the next flush (5 min later), and one line is
+   logged (`relay: KV read failed` / `write failed`).
 4. Per-client rate limits ([Rate limits](#rate-limits)).
 
 ## Cron job and provider cost
@@ -144,10 +152,10 @@ second to the same key**; reads are 100,000/day. The relay writes:
 | Juhe detail, per active storm (30-min freshness) | ≈ 48 |
 | QWeather storm-list, only when Juhe is unavailable | ≈ 144 |
 | QWeather track + forecast, per active storm, only when Juhe is unavailable | ≈ 96 |
-| Daily budget counters (one write per request that reached a provider, one per cron run) | ≈ the provider writes above + 48 |
+| Daily budget counters (batched: one merge per 20 calls or 5 min per isolate, one per cron run) | ≈ calls ÷ 20 + 48, e.g. ≈ 220–300 at 4,400 calls/day |
 | Known-storm refresh gate (only when an unknown id forces a list refresh) | ≤ 144 per list |
 
-The budget counters roughly double the cache writes; the figures below are without them.
+The figures below are without the budget counters and the gate.
 With Juhe working: at most ≈ 192 + 48 × storms, about 340/day with 3 active storms. If both
 sources end up in use on the same day (Juhe failing part of the time): ≈ 336 + 144 × storms,
 about 770/day with 3 storms, 910 with 4 and over 1,000 with 5. Simultaneous misses in several Cloudflare
@@ -159,11 +167,12 @@ access is best effort (`src/kv.ts`). The request still returns the provider's an
 responses are shared only through each location's edge cache, so **more requests reach the
 providers** (one per location per freshness window instead of one globally), which costs
 provider quota. A failed cron write keeps the previous alert list (the app ignores lists
-older than 6 h). The **Workers Paid** plan (USD 5/month) includes 1 million KV writes per
-month and lifts this limit; the 1 write/second per key limit stays but is harmless here.
-While writes are refused the daily budget counters cannot grow either, so the budget stops
-limiting until the KV limit resets (fail open); the known-id check still works from the
-lists in KV and the edge cache. Another reason to use Workers Paid in storm season.
+older than 6 h). The **Workers Paid** plan (USD 5/month, 1 million KV writes per month) is
+**optional**: the batched budget counter fits easily in the Free plan, and Paid only adds
+headroom for days with many active storms on both sources. The 1 write/second per key
+limit stays but is harmless here. If the write limit is reached anyway, merges fail and the
+counts stay in each isolate's memory (still enforced per isolate) until KV accepts writes
+again; the known-id check keeps working from the lists in KV and the edge cache.
 
 ## Deploy (owner, once)
 

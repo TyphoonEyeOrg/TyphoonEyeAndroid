@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ALERTS_KV_KEY, refreshAlerts, WATCH_POINTS, type AlertsState } from "../src/alerts";
-import { budgetKey, DEFAULT_DAILY_BUDGET, dailyLimit } from "../src/budget";
+import { budgetKey, budgetMemory, DEFAULT_DAILY_BUDGET, dailyLimit, FLUSH_EVERY_CALLS, FLUSH_INTERVAL_MS } from "../src/budget";
 import { allowedYears, localDate, localYear, secondsUntilLocalMidnight } from "../src/clock";
 import { handleFetch } from "../src/index";
 import { matchRoute, RouteError } from "../src/routes";
@@ -121,8 +121,8 @@ describe("known-storm guard", () => {
       expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
     }
     expect(upstream.requests).toHaveLength(0);
-    expect(counter(env.RELAY_KV, "juhe")).toBe(0);
-    expect(counter(env.RELAY_KV, "qweather")).toBe(0);
+    expect(budgetMemory("juhe")?.pending ?? 0).toBe(0);
+    expect(budgetMemory("qweather")?.pending ?? 0).toBe(0);
   });
 
   it("passes ids that are in the cached list, even a stale one", async () => {
@@ -135,8 +135,8 @@ describe("known-storm guard", () => {
     expect((await handleFetch(clientRequest(`${DETAIL}202609`), env, deps)).status).toBe(200);
     expect((await handleFetch(clientRequest(`${TRACK}NP_2609`), env, deps)).status).toBe(200);
     expect(paths(upstream)).toEqual(["detail", "storm-track"]);
-    expect(counter(env.RELAY_KV, "juhe")).toBe(1);
-    expect(counter(env.RELAY_KV, "qweather")).toBe(1);
+    expect(budgetMemory("juhe")?.pending).toBe(1);
+    expect(budgetMemory("qweather")?.pending).toBe(1);
   });
 
   it("uses the list from the edge cache (the app fetched it just before)", async () => {
@@ -221,21 +221,15 @@ describe("daily upstream budget", () => {
     expect(dailyLimit("juhe", makeEnv({ JUHE_DAILY_BUDGET: "lots" }))).toBe(400);
   });
 
-  it("counts every provider call per source and UTC+8 day; cache hits are free", async () => {
+  it("counts every provider call per source; cache hits are free", async () => {
     const env = makeEnv();
-    const clock = { now: T0 };
     const upstream = provider();
-    const get = (path: string) => handleFetch(clientRequest(path), env, makeDeps(upstream, clock, null));
+    const get = (path: string) => handleFetch(clientRequest(path), env, makeDeps(upstream, { now: T0 }, null));
     await get("/v1/juhe/fapigw/typhoon/active");
     await get("/v1/juhe/fapigw/typhoon/active"); // KV hit
     await get(`${DETAIL}202609`);
-    expect(counter(env.RELAY_KV, "juhe")).toBe(2);
-    expect(env.RELAY_KV.puts.find((p) => p.key === budgetKey("juhe", T0))?.ttl).toBe(2 * 24 * 3600);
-
-    clock.now = Date.UTC(2026, 9, 8, 16, 30); // 00:30 UTC+8 next day: new counter
-    await get("/v1/juhe/fapigw/typhoon/active");
-    expect(counter(env.RELAY_KV, "juhe", clock.now)).toBe(1);
-    expect(budgetKey("juhe", clock.now)).toBe("budget:v1:juhe:2026-10-09");
+    expect(budgetMemory("juhe")).toMatchObject({ date: "2026-10-08", pending: 2 });
+    expect(budgetMemory("qweather")).toBeUndefined();
   });
 
   it("over budget: serves the last good answer (stale) without calling the provider", async () => {
@@ -294,8 +288,7 @@ describe("daily upstream budget", () => {
         throw new Error("KV put() failed");
       }
     }
-    // Counter unreadable → counts as 0, so 3 calls go through despite a budget of 2.
-    const env = makeEnv({ RELAY_KV: new BrokenKV(), QWEATHER_DAILY_BUDGET: "2" });
+    const env = makeEnv({ RELAY_KV: new BrokenKV() });
     const upstream = provider({ qweather: { 2026: QW_LIST } });
     const deps = makeDeps(upstream, { now: T0 }, null);
 
@@ -306,6 +299,130 @@ describe("daily upstream budget", () => {
     expect(paths(upstream)).toEqual(["storm-list", "storm-list", "storm-track"]);
     expect(warn).toHaveBeenCalledWith("relay: KV read failed");
     expect(warn).toHaveBeenCalledWith("relay: KV write failed");
+  });
+});
+
+describe("batched budget counter", () => {
+  /** Juhe list with [n] storms 202601… so n distinct detail requests are all cache misses. */
+  const manyStorms = (n: number) => ({
+    reason: "success",
+    error_code: 0,
+    result: { data: Array.from({ length: n }, (_, i) => ({ tfid: `2026${String(i + 1).padStart(2, "0")}` })) },
+  });
+  const budgetPuts = (kv: FakeKV) => kv.puts.filter((p) => p.key.startsWith("budget:"));
+
+  function setup(overrides: Parameters<typeof makeEnv>[0] = {}, kv: FakeKV = new FakeKV()) {
+    const env = makeEnv({ RELAY_KV: kv, ...overrides });
+    seedList(env.RELAY_KV, JUHE_LIST_KEY, manyStorms(40), T0);
+    const upstream = provider();
+    const clock = { now: T0 };
+    const pending: Promise<unknown>[] = [];
+    let next = 1;
+    const deps = () => ({ ...makeDeps(upstream, clock, null), waitUntil: (p: Promise<unknown>) => void pending.push(p) });
+    const call = async (n = 1) => {
+      for (let i = 0; i < n; i++, next++) {
+        const res = await handleFetch(clientRequest(`${DETAIL}2026${String(next).padStart(2, "0")}`), env, deps());
+        await Promise.all(pending.splice(0));
+        if (res.status !== 200) return res.status;
+      }
+      return 200;
+    };
+    const ping = async () => {
+      await handleFetch(clientRequest("/v1/health"), env, deps());
+      await Promise.all(pending.splice(0));
+    };
+    return { env, upstream, clock, call, ping, pending };
+  }
+
+  it("writes nothing to KV before 20 calls, then merges all 20 in one write (after the response)", async () => {
+    expect(FLUSH_EVERY_CALLS).toBe(20);
+    const { env, upstream, call } = setup();
+    await call(19);
+    expect(budgetPuts(env.RELAY_KV)).toHaveLength(0);
+    expect(budgetMemory("juhe")?.pending).toBe(19);
+    await call(1);
+    expect(upstream.requests).toHaveLength(20);
+    expect(budgetPuts(env.RELAY_KV)).toEqual([{ key: "budget:v1:juhe:2026-10-08", ttl: 2 * 24 * 3600 }]);
+    expect(counter(env.RELAY_KV, "juhe")).toBe(20);
+    expect(budgetMemory("juhe")?.pending).toBe(0);
+  });
+
+  it("flushes 5 minutes after the last flush, on any request", async () => {
+    expect(FLUSH_INTERVAL_MS).toBe(5 * MIN);
+    const { env, clock, call, ping } = setup();
+    await call(3);
+    clock.now += 4 * MIN;
+    await ping();
+    expect(budgetPuts(env.RELAY_KV)).toHaveLength(0);
+    clock.now += 1 * MIN;
+    await ping();
+    expect(counter(env.RELAY_KV, "juhe")).toBe(3);
+    expect(budgetPuts(env.RELAY_KV)).toHaveLength(1);
+    clock.now += 10 * MIN;
+    await ping(); // nothing pending: no write
+    expect(budgetPuts(env.RELAY_KV)).toHaveLength(1);
+  });
+
+  it("adds the pending calls to the value in KV (merge with other isolates)", async () => {
+    const { env, call } = setup();
+    await call(5);
+    setCounter(env.RELAY_KV, "juhe", 100); // another isolate flushed meanwhile
+    await call(15);
+    expect(counter(env.RELAY_KV, "juhe")).toBe(120);
+  });
+
+  it("checks the budget against last known KV value + pending calls", async () => {
+    const kv = new FakeKV();
+    setCounter(kv, "juhe", 20);
+    const { env, upstream, call } = setup({ JUHE_DAILY_BUDGET: "25" }, kv);
+    expect(await call(5)).toBe(200);
+    expect(await call(1)).toBe(503); // 20 in KV + 5 pending = 25
+    expect(upstream.requests).toHaveLength(5);
+    expect(counter(env.RELAY_KV, "juhe")).toBe(20); // not flushed yet
+  });
+
+  it("re-reads the KV counter at most once a minute", async () => {
+    const { env, clock, call } = setup({ JUHE_DAILY_BUDGET: "100" });
+    await call(1);
+    setCounter(env.RELAY_KV, "juhe", 100); // other isolates used the rest
+    clock.now += 30 * 1000;
+    expect(await call(1)).toBe(200); // still the value read 30 s ago
+    clock.now += 31 * 1000;
+    expect(await call(1)).toBe(503);
+  });
+
+  it("keeps the pending calls when KV fails and retries at the next flush, 5 min later", async () => {
+    class FlakyKV extends FakeKV {
+      down = true;
+      override async put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
+        if (this.down && key.startsWith("budget:")) throw new Error("KV put() failed");
+        return super.put(key, value, options);
+      }
+    }
+    const kv = new FlakyKV();
+    const { clock, call } = setup({}, kv);
+    await call(20);
+    expect(warn).toHaveBeenCalledWith("relay: KV write failed");
+    expect(budgetMemory("juhe")?.pending).toBe(20);
+    expect(await call(5)).toBe(200); // served (fail open); no new attempt yet
+    expect(warn.mock.calls.filter((c: unknown[]) => c[0] === "relay: KV write failed")).toHaveLength(1);
+    kv.down = false;
+    clock.now += 5 * MIN;
+    await call(1);
+    expect(counter(kv, "juhe")).toBe(26);
+    expect(budgetMemory("juhe")?.pending).toBe(0);
+  });
+
+  it("starts a new count at the UTC+8 date change and drops the old day's pending calls", async () => {
+    const { env, clock, call } = setup({ JUHE_DAILY_BUDGET: "10" });
+    clock.now = Date.UTC(2026, 9, 8, 15, 58); // 23:58 UTC+8
+    seedList(env.RELAY_KV, JUHE_LIST_KEY, manyStorms(40), clock.now);
+    await call(10);
+    expect(await call(1)).toBe(503);
+    clock.now = Date.UTC(2026, 9, 8, 16, 1); // 00:01 UTC+8, 9 Oct
+    expect(await call(1)).toBe(200);
+    expect(budgetMemory("juhe")).toMatchObject({ date: "2026-10-09", pending: 1 });
+    expect(env.RELAY_KV.store.has("budget:v1:juhe:2026-10-08")).toBe(false);
   });
 });
 
@@ -337,6 +454,20 @@ describe("cron and the budget", () => {
     const next = await refreshAlerts(env, makeDeps(upstream, { now: T0 + 30 * MIN }, null));
     expect(next).toEqual({ skipped: "budget_exhausted" });
     expect(upstream.requests).toHaveLength(10);
+  });
+
+  it("flushes this isolate's pending request counts at the end of every run", async () => {
+    const env = makeEnv();
+    const upstream = provider({ juhe: { reason: "success", error_code: 0, result: { data: [] } } });
+    await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), env, makeDeps(upstream, { now: T0 }, null));
+    expect(counter(env.RELAY_KV, "qweather")).toBe(0);
+
+    const later = T0 + 11 * MIN; // Juhe list from KV is stale now
+    await refreshAlerts(env, makeDeps(upstream, { now: later }, null));
+    expect(counter(env.RELAY_KV, "qweather", later)).toBe(1); // the earlier storm-list call
+    expect(counter(env.RELAY_KV, "juhe", later)).toBe(1); // the cron's Juhe list call
+    expect(budgetMemory("qweather")?.pending).toBe(0);
+    expect(budgetMemory("juhe")?.pending).toBe(0);
   });
 
   it("falls back to the QWeather list when the Juhe budget is used up", async () => {

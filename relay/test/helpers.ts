@@ -1,3 +1,4 @@
+import { resetBudgetMemory } from "../src/budget";
 import type { CacheLike, Deps, Env, KVLike, RateLimiterLike } from "../src/env";
 
 export class FakeKV implements KVLike {
@@ -50,7 +51,9 @@ export const SECRETS = {
   QWEATHER_HOST: "abc123.re.qweatherapi.com",
 };
 
+/** A fresh environment; also forgets the budget counts kept in memory (a fresh isolate). */
 export function makeEnv(overrides: Partial<Env> = {}): Env & { RELAY_KV: FakeKV } {
+  resetBudgetMemory();
   return {
     ...SECRETS,
     RELAY_KV: new FakeKV(),

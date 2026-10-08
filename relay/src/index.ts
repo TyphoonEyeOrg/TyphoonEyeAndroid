@@ -12,9 +12,10 @@
  * Licensed under the Apache License, Version 2.0 (see ../LICENSE).
  */
 import { refreshAlerts, serveAlerts, ALERTS_KV_KEY, type AlertsState } from "./alerts";
+import { flushDue } from "./budget";
 import type { CacheLike, Deps, Env } from "./env";
 import { errorResponse, jsonResponse } from "./http";
-import { kvGetJson } from "./kv";
+import { inBackground, kvGetJson } from "./kv";
 import { proxy } from "./proxy";
 import { qweatherConfigured } from "./qweatherAuth";
 import { matchRoute, RouteError } from "./routes";
@@ -43,15 +44,25 @@ export async function clientKey(request: Request, env: Env): Promise<string> {
 }
 
 export async function handleFetch(request: Request, env: Env, deps: Deps): Promise<Response> {
+  try {
+    return await routeRequest(request, env, deps);
+  } finally {
+    // Merge this isolate's batched budget counts into KV when due (after the response).
+    const flush = flushDue(env, deps.now());
+    if (flush) await inBackground(deps, flush);
+  }
+}
+
+async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Response> {
   if (request.method !== "GET") {
     const response = errorResponse(405, "method_not_allowed");
     response.headers.set("Allow", "GET");
     return response;
   }
 
-  let route;
+  let matched;
   try {
-    route = matchRoute(new URL(request.url), deps.now());
+    matched = matchRoute(new URL(request.url), deps.now());
   } catch (e) {
     if (e instanceof RouteError) return errorResponse(e.status, e.code, e.code === "not_found" ? 3600 : e.status === 404 ? 60 : 0);
     return errorResponse(400, "bad_request");
@@ -63,7 +74,7 @@ export async function handleFetch(request: Request, env: Env, deps: Deps): Promi
     if (!success) return errorResponse(429, "rate_limited");
   }
 
-  switch (route.kind) {
+  switch (matched.kind) {
     case "health": {
       const state = (await kvGetJson(env, ALERTS_KV_KEY, 60)) as AlertsState | null;
       const body = JSON.stringify({
@@ -76,7 +87,7 @@ export async function handleFetch(request: Request, env: Env, deps: Deps): Promi
     case "alerts":
       return serveAlerts(env, deps);
     case "upstream":
-      return proxy(route, env, deps, key);
+      return proxy(matched, env, deps, key);
   }
 }
 

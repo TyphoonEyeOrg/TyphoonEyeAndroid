@@ -7,11 +7,17 @@ import type { Deps, Env } from "./env";
  * Logs carry no key names, parameters or client data.
  */
 export async function kvGetJson(env: Env, key: string, cacheTtl?: number): Promise<unknown | null> {
+  const read = await kvTryGetJson(env, key, cacheTtl);
+  return read.ok ? read.value : null;
+}
+
+/** Like kvGetJson, but tells a failed read apart from a missing key. Never throws. */
+export async function kvTryGetJson(env: Env, key: string, cacheTtl?: number): Promise<{ ok: true; value: unknown | null } | { ok: false }> {
   try {
-    return await env.RELAY_KV.get(key, cacheTtl ? { type: "json", cacheTtl } : { type: "json" });
+    return { ok: true, value: await env.RELAY_KV.get(key, cacheTtl ? { type: "json", cacheTtl } : { type: "json" }) };
   } catch {
     console.warn("relay: KV read failed");
-    return null;
+    return { ok: false };
   }
 }
 
