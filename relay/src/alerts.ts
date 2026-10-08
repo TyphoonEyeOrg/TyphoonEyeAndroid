@@ -10,10 +10,12 @@ import { scrubSecrets, sourceConfigured, upstreamRequest } from "./upstream";
 /**
  * Official typhoon warnings without user locations.
  *
- * A Cron Trigger queries QWeather's weather alerts at a FIXED list of coastal points
- * (`data/coastal-points.json`) and stores one merged list in KV. Every app downloads the
- * same list (`GET /v1/alerts`) and picks nearby points on the device, so no location ever
- * reaches the relay and the provider cost does not grow with the number of users.
+ * A Cron Trigger (every ALERT_CRON_INTERVAL_MINUTES) queries QWeather's weather alerts at a
+ * FIXED list of coastal points (`data/coastal-points.json`) and stores one merged list in KV.
+ * Every app downloads the same list (`GET /v1/alerts`) and picks nearby points on the device,
+ * so no location ever reaches the relay and the provider cost does not grow with the number
+ * of users. Coverage is therefore coastal only: the app uses points within 150 km of the
+ * user; farther away it shows only its own intensity alerts.
  *
  * Cost control: when no storm is active in the NW Pacific the job makes one list call and
  * no alert calls; with storm positions known (Juhe), only points within
@@ -52,10 +54,18 @@ export const ALERTS_KV_KEY = "alerts:v1";
 export const WATCH_POINTS: WatchPoint[] = (pointsFile as { points: WatchPoint[] }).points;
 const DEFAULT_RADIUS_KM = 1500;
 const DEFAULT_MAX_POINTS = 40;
-/** A point not re-queried this run keeps its last answer for this long. */
-const KEEP_UNREFRESHED_MS = 2 * 60 * 60 * 1000;
+/** Cron interval; must match `[triggers] crons` in wrangler.toml. */
+export const ALERT_CRON_INTERVAL_MINUTES = 30;
+/**
+ * A point not re-queried this run (rotation, failed call) keeps its last answer for this
+ * long: 4 cron intervals = 2 h, i.e. one full rotation of all points plus missed runs.
+ */
+export const KEEP_UNREFRESHED_MS = 4 * ALERT_CRON_INTERVAL_MINUTES * 60 * 1000;
 const CONCURRENCY = 6;
-/** How long a client may cache GET /v1/alerts (the cron runs every 15 min). */
+/**
+ * How long a client may cache GET /v1/alerts. Short compared to the cron interval so a
+ * new list reaches apps within minutes of being written.
+ */
 export const ALERTS_MAX_AGE_SECONDS = 5 * 60;
 
 /** QWeather event codes for typhoon-related alerts; same list as the app's WarningModels.kt. */

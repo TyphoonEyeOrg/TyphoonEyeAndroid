@@ -14,9 +14,10 @@ routes = [
   { pattern = "te-relay.seamain.org", custom_domain = true }
 ]
 
-# Refresh the shared typhoon-warning list every 15 minutes.
+# Refresh the shared typhoon-warning list every 30 minutes
+# (keep ALERT_CRON_INTERVAL_MINUTES in src/alerts.ts in sync).
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/30 * * * *"]
 
 # No request logs or traces: the relay must not keep IPs or query parameters.
 [observability]
@@ -28,21 +29,25 @@ enabled = false
 binding = "RELAY_KV"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
-# Per client (salted hash of the IP), counted per Cloudflare location.
-# Generous on purpose: many mobile users in China share one carrier-NAT IP.
+# Rate limits per client (salted hash of the IP), counted per Cloudflare location.
+# Loose on purpose: carrier-grade NAT puts many mobile users in China behind one IP.
+# To change a limit, edit `limit` below and redeploy (`period` must be 10 or 60 seconds).
+#
+# All requests: 600 per minute per client IP.
 [[ratelimits]]
 name = "RL_REQUESTS"
 namespace_id = "41001"
   [ratelimits.simple]
-  limit = 120
+  limit = 600
   period = 60
 
-# Requests that would reach a weather provider (both cache layers missed).
+# Requests that would reach a weather provider (edge cache and KV both missed):
+# 120 per minute per client IP.
 [[ratelimits]]
 name = "RL_UPSTREAM"
 namespace_id = "41002"
   [ratelimits.simple]
-  limit = 20
+  limit = 120
   period = 60
 
 [vars]

@@ -1,4 +1,4 @@
 • Unsupported system languages now fall back to English instead of Chinese.
 • Live typhoon data works right after install, with no API key needed. It is fetched from third-party providers through TyphoonEye's own relay server.
-• Your location is not sent to the relay. Nearby warnings are matched on your device.
+• Your location is not sent to the relay. Warnings near you are matched on your device and cover coastal areas only.
 • Data is cached to cut network requests, and storms with no new observation for 24 hours are no longer shown as active.

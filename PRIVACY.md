@@ -36,7 +36,7 @@ The F-Droid build contains **no** weather API keys. All typhoon data requests go
 - **What the app sends:** only the typhoon list / detail request itself (for example a storm id or the current year). No API key, no location, no device or account identifier.  
 - **IP address:** like any web request, the connection reveals your IP address to Cloudflare and to the relay. The relay uses it only for rate limiting (as a salted hash, kept in memory for the current rate-limit window) and does **not** log or store it. The relay keeps no request logs. Cloudflare, as the hosting provider, processes connections under [its own privacy policy](https://www.cloudflare.com/privacypolicy/).  
 - **Providers:** the relay forwards no data from your device to QWeather or Juhe — no IP address, headers or location; the providers only see requests from the relay. Responses are cached on the relay (lists 10 minutes, storm details 30 minutes) and shared by all users.  
-- **Official warnings without your location:** the relay regularly fetches typhoon-related official warnings for a fixed list of coastal cities and serves the same list to every user. The app downloads the whole list and picks warnings near you **on your device**. Your location is never sent to the relay or to any weather provider.  
+- **Official warnings without your location:** the relay regularly fetches typhoon-related official warnings for a fixed list of coastal cities and serves the same list to every user. The app downloads the whole list and picks warnings near you **on your device**. Your location is never sent to the relay or to any weather provider. Because the list is fixed, these warnings currently cover coastal areas only (within 150 km of a listed city); farther away the app shows only its own intensity alerts.  
 
 #### GitHub build (`github` flavor): direct requests
 
@@ -108,7 +108,7 @@ https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/issues
 **台风眼**是开源应用，不含广告与统计 SDK，也没有用于收集个人档案的台风眼自有账号服务器。
 
 - **定位（可选）：** 仅在开启相关预警并授权后，于设备本地估算与台风距离；可缓存最近位置标签。不会上传到台风眼自有服务器。  
-- **F-Droid 版的气象数据：** 应用内不含任何 API 密钥。台风数据请求经 Cloudflare 发往台风眼自己的中转服务器（`te-relay.seamain.org`，源码见 `relay/`），由中转服务器持有密钥，向第三方服务商（和风 / 聚合）获取数据。中转服务器会用到你的 IP 地址做限流，但不保存，也不记录请求日志；Cloudflare 作为托管方按其自身隐私政策处理连接。你的位置不会发给中转服务器：中转服务器定时获取一组固定沿海城市的台风相关官方预警，所有用户拿到同一份列表，附近的预警在本机筛选。  
+- **F-Droid 版的气象数据：** 应用内不含任何 API 密钥。台风数据请求经 Cloudflare 发往台风眼自己的中转服务器（`te-relay.seamain.org`，源码见 `relay/`），由中转服务器持有密钥，向第三方服务商（和风 / 聚合）获取数据。中转服务器会用到你的 IP 地址做限流，但不保存，也不记录请求日志；Cloudflare 作为托管方按其自身隐私政策处理连接。你的位置不会发给中转服务器：中转服务器定时获取一组固定沿海城市的台风相关官方预警，所有用户拿到同一份列表，附近的预警在本机筛选；因此目前只覆盖沿海地区（距所列城市 150 公里以内），更远的地区只显示应用自己的强度提醒。  
 - **GitHub 版的气象数据：** 构建时内置密钥，直接请求聚合、和风等第三方；授权定位后，官方预警按你的大致位置（保留两位小数，约 1 公里）向和风查询。  
 - **两个版本：** 地图瓦片直接请求所选瓦片服务（如高德）。第三方服务适用对方隐私条款。无法获取实时数据且本机没有缓存时，可选择进入明确标注的演示模式（内置虚构台风）。  
 - **更新：** GitHub 渠道可能检查 GitHub Releases；F-Droid 渠道关闭该能力。  

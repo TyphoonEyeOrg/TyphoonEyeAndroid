@@ -101,10 +101,10 @@ describe("best-effort KV on the request path", () => {
 describe("best-effort KV in the cron job", () => {
   const previous: AlertsState = {
     version: 1,
-    updatedAtMs: T0 - 15 * 60 * 1000,
+    updatedAtMs: T0 - 30 * 60 * 1000,
     cursor: 0,
     activeStorms: 1,
-    points: [{ id: "hk", name: "香港", lat: 22.3, lon: 114.17, fetchedAtMs: T0 - 15 * 60 * 1000, alerts: [{ id: "keep", eventType: { name: "台风", code: "1001" } }] }],
+    points: [{ id: "hk", name: "香港", lat: 22.3, lon: 114.17, fetchedAtMs: T0 - 30 * 60 * 1000, alerts: [{ id: "keep", eventType: { name: "台风", code: "1001" } }] }],
   };
 
   async function seededKv(): Promise<WriteLimitedKV> {

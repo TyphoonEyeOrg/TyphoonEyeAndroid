@@ -5,9 +5,10 @@ Features:
 • Historical tracks, forecast paths, and 7/10/12-level wind radii by quadrant
 • Optional distance-based emergency alerts (needs location permission)
 • Material Design 3, dynamic color, light/dark theme, multiple languages
+• Clearly labeled sample data you can open when live data can't be loaded
 
 Network note:
-Typhoon data comes from third-party weather APIs (QWeather / Juhe) and is fetched through TyphoonEye's own relay server on Cloudflare. The API keys live only on the relay; the app contains none. The relay uses your IP address for rate limiting and does not store it. Your location is never sent to the relay: nearby warnings are matched on your device. Optional mainland China basemap tiles may use Amap. No ads or analytics.
+Typhoon data comes from third-party weather APIs (QWeather / Juhe) and is fetched through TyphoonEye's own relay server on Cloudflare. The API keys live only on the relay; the app contains none. The relay uses your IP address for rate limiting and does not store it. Your location is never sent to the relay: warnings near you are matched on your device and currently cover coastal areas only. Optional mainland China basemap tiles may use Amap. No ads or analytics.
 
 This is not an official meteorological app. In an emergency, always follow your local meteorological authority.
 

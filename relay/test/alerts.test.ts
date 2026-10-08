@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALERTS_KV_KEY, batchOf, isTyphoonRelated, refreshAlerts, selectPoints, WATCH_POINTS, type AlertsState } from "../src/alerts";
+import { ALERT_CRON_INTERVAL_MINUTES, ALERTS_KV_KEY, batchOf, isTyphoonRelated, refreshAlerts, selectPoints, WATCH_POINTS, type AlertsState } from "../src/alerts";
 import { handleFetch } from "../src/index";
 import { clientRequest, FakeUpstream, json, makeDeps, makeEnv } from "./helpers";
 
@@ -106,7 +106,7 @@ describe("cron refresh", () => {
     const env = makeEnv({ JUHE_KEY: undefined });
     const clock = { now: T0 };
     const first = await refreshAlerts(env, makeDeps(upstream, clock, null));
-    clock.now += 15 * 60 * 1000;
+    clock.now += ALERT_CRON_INTERVAL_MINUTES * 60 * 1000;
     const second = await refreshAlerts(env, makeDeps(upstream, clock, null));
 
     expect(first.selected).toBe(WATCH_POINTS.length);
@@ -120,7 +120,7 @@ describe("cron refresh", () => {
 
   it("keeps the previous list when every alert query fails", async () => {
     const env = makeEnv();
-    const previous: AlertsState = { version: 1, updatedAtMs: T0 - 900_000, cursor: 0, activeStorms: 1, points: [] };
+    const previous: AlertsState = { version: 1, updatedAtMs: T0 - 30 * 60 * 1000, cursor: 0, activeStorms: 1, points: [] };
     await env.RELAY_KV.put(ALERTS_KV_KEY, JSON.stringify(previous));
     const upstream = new FakeUpstream((r) => (r.url.includes("juhe") ? json(juheActive([{ lat: "21.5", lng: "116.5" }])) : json({}, 500)));
 

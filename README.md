@@ -116,13 +116,18 @@ CI may override via `VERSION_NAME` / `VERSION_CODE` env vars. Tag releases as `v
 
 | Build | Typhoon data | API keys | Official warnings |
 |-------|--------------|----------|-------------------|
-| `fdroid` | Through the TyphoonEye relay `https://te-relay.seamain.org` (Cloudflare Worker, source in [`relay/`](relay/)) | None in the app; Worker secrets only | Relay fetches warnings for a fixed list of coastal cities; the app downloads the shared list and filters by distance **on the device** |
+| `fdroid` | Through the TyphoonEye relay `https://te-relay.seamain.org` (Cloudflare Worker, source in [`relay/`](relay/)) | None in the app; Worker secrets only | Relay fetches warnings for a fixed list of coastal cities; the app downloads the shared list and filters by distance **on the device**. Coastal areas only: more than 150 km from every listed city, only the app's own intensity alerts |
 | `github` | Directly from Juhe / QWeather | Built in at build time (CI secrets / `local.properties`) | Queried from QWeather at the device's approximate position (if location is allowed) |
 
 The relay forwards only the calls the app needs (typhoon list / detail from Juhe; storm list, track and
 forecast from QWeather), returns the providers' JSON unchanged and caches it (lists 10 min, details
 30 min). It uses the client IP only for rate limiting and does not store it; it keeps no request logs.
 Requests to it pass through Cloudflare. Deployment: [relay/README.md](relay/README.md).
+
+In the F-Droid build, official warnings near you therefore cover **coastal areas only**
+(54 fixed points along the coasts of mainland China, Hong Kong, Macau, Taiwan and nearby
+countries; a point applies within 150 km). Farther inland the app shows only its own
+intensity alerts for nearby or very strong storms.
 
 ---
 
