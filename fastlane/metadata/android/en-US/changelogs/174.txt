@@ -1,4 +1,4 @@
 • Unsupported system languages now fall back to English instead of Chinese.
-• The F-Droid build has no bundled API key. Without a key, the app explains this and offers a clearly labeled demo with fictional storms.
-• You can enter your own QWeather or Juhe key in Settings. It stays on your device.
+• Live typhoon data works right after install, with no API key needed. It is fetched from third-party providers through TyphoonEye's own relay server.
+• Your location is not sent to the relay. Nearby warnings are matched on your device.
 • Data is cached to cut network requests, and storms with no new observation for 24 hours are no longer shown as active.
