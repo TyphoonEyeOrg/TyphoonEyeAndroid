@@ -2,8 +2,9 @@
  * TyphoonEye relay — Cloudflare Worker used by the F-Droid build of TyphoonEye.
  *
  * - Holds the weather API keys (Worker secrets); the app contains none.
- * - Forwards only the calls the app needs (path allowlist, validated parameters),
- *   returns the provider's JSON unchanged, and caches it (list 10 min, detail 30 min).
+ * - Forwards only the calls the app needs (path allowlist, validated parameters, storm ids
+ *   that are in the current list), returns the provider's JSON unchanged, and caches it
+ *   (list 10 min, detail 30 min). A global daily budget per provider caps provider calls.
  * - Serves official typhoon warnings for fixed coastal points (cron job), so the app never
  *   has to send a location.
  * - Uses the client IP only as a (salted, hashed) rate-limit key; never logs or stores it.
@@ -52,7 +53,7 @@ export async function handleFetch(request: Request, env: Env, deps: Deps): Promi
   try {
     route = matchRoute(new URL(request.url), deps.now());
   } catch (e) {
-    if (e instanceof RouteError) return errorResponse(e.status, e.code, e.status === 404 ? 3600 : 0);
+    if (e instanceof RouteError) return errorResponse(e.status, e.code, e.code === "not_found" ? 3600 : e.status === 404 ? 60 : 0);
     return errorResponse(400, "bad_request");
   }
 

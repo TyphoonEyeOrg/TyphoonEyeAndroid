@@ -1,10 +1,12 @@
 import pointsFile from "../data/coastal-points.json";
+import { Budgets } from "./budget";
+import { localYear } from "./clock";
 import type { Deps, Env } from "./env";
 import { jsonResponse } from "./http";
 import { kvGetJson, kvPut } from "./kv";
 import { cachedJson } from "./proxy";
 import { qweatherBaseUrl, qweatherConfigured } from "./qweatherAuth";
-import { LIST_TTL_SECONDS, type UpstreamRoute } from "./routes";
+import { juheListRoute, qweatherListRoute } from "./routes";
 import { fetchUpstream, scrubSecrets, sourceConfigured, upstreamRequest } from "./upstream";
 
 /**
@@ -21,6 +23,8 @@ import { fetchUpstream, scrubSecrets, sourceConfigured, upstreamRequest } from "
  * no alert calls; with storm positions known (Juhe), only points within
  * ALERT_STORM_RADIUS_KM of a storm are queried; at most MAX_ALERT_POINTS_PER_RUN points are
  * queried per run (rotating), which also keeps a run under the Workers subrequest limit.
+ * Every provider call counts against the daily upstream budget (budget.ts): the run is
+ * skipped when the QWeather budget is used up, and never queries more points than remain.
  */
 
 export interface WatchPoint {
@@ -106,10 +110,9 @@ interface StormSnapshot {
 }
 
 /** Active NW Pacific storms via the shared list cache (same KV entry the app's requests use). */
-export async function activeStorms(env: Env, deps: Deps): Promise<StormSnapshot | null> {
+export async function activeStorms(env: Env, deps: Deps, budgets: Budgets): Promise<StormSnapshot | null> {
   if (sourceConfigured("juhe", env)) {
-    const route: UpstreamRoute = { kind: "upstream", source: "juhe", path: "fapigw/typhoon/active", params: [], ttlSeconds: LIST_TTL_SECONDS };
-    const json = (await cachedJson(route, env, deps)) as { result?: { data?: { lat?: string; lng?: string }[] } } | null;
+    const json = (await cachedJson(juheListRoute(), env, deps, budgets)) as { result?: { data?: { lat?: string; lng?: string }[] } } | null;
     if (json) {
       const data = json.result?.data ?? [];
       const positions = data
@@ -119,15 +122,8 @@ export async function activeStorms(env: Env, deps: Deps): Promise<StormSnapshot 
     }
   }
   if (qweatherConfigured(env)) {
-    const year = String(new Date(deps.now()).getUTCFullYear());
-    const route: UpstreamRoute = {
-      kind: "upstream",
-      source: "qweather",
-      path: "v7/tropical/storm-list",
-      params: [["basin", "NP"], ["year", year]],
-      ttlSeconds: LIST_TTL_SECONDS,
-    };
-    const json = (await cachedJson(route, env, deps)) as { storm?: { isActive?: string }[] } | null;
+    const route = qweatherListRoute(localYear(deps.now()));
+    const json = (await cachedJson(route, env, deps, budgets)) as { storm?: { isActive?: string }[] } | null;
     if (json) return { count: (json.storm ?? []).filter((s) => s.isActive === "1").length, positions: null };
   }
   return null;
@@ -175,10 +171,21 @@ export interface RefreshSummary {
 /** Cron job. Never throws; a failed run keeps the previous list. */
 export async function refreshAlerts(env: Env, deps: Deps): Promise<RefreshSummary> {
   if (!qweatherConfigured(env)) return { skipped: "qweather_not_configured" };
+  const budgets = new Budgets(env, deps.now());
+  try {
+    return await refreshWithBudget(env, deps, budgets);
+  } finally {
+    await budgets.flushAll();
+  }
+}
+
+async function refreshWithBudget(env: Env, deps: Deps, budgets: Budgets): Promise<RefreshSummary> {
+  const qweather = await budgets.get("qweather");
+  if (qweather.exhausted) return { skipped: "budget_exhausted" };
   const now = deps.now();
   const previous = (await kvGetJson(env, ALERTS_KV_KEY)) as AlertsState | null;
 
-  const storms = await activeStorms(env, deps);
+  const storms = await activeStorms(env, deps, budgets);
   if (!storms) return { skipped: "storm_list_unavailable" };
 
   if (storms.count === 0) {
@@ -188,7 +195,11 @@ export async function refreshAlerts(env: Env, deps: Deps): Promise<RefreshSummar
   }
 
   const selected = selectPoints(WATCH_POINTS, storms.positions, intVar(env.ALERT_STORM_RADIUS_KM, DEFAULT_RADIUS_KM));
-  const { batch, next } = batchOf(selected, previous?.cursor ?? 0, intVar(env.MAX_ALERT_POINTS_PER_RUN, DEFAULT_MAX_POINTS));
+  // Never more alert calls than the QWeather budget has left today.
+  const maxPoints = Math.min(intVar(env.MAX_ALERT_POINTS_PER_RUN, DEFAULT_MAX_POINTS), qweather.remaining);
+  if (selected.length > 0 && maxPoints <= 0) return { skipped: "budget_exhausted", activeStorms: storms.count };
+  const { batch, next } = batchOf(selected, previous?.cursor ?? 0, maxPoints);
+  qweather.spend(batch.length);
   const results = await mapLimited(batch, CONCURRENCY, (p) => queryPoint(p, env, deps));
 
   const previousById = new Map((previous?.points ?? []).map((p) => [p.id, p]));

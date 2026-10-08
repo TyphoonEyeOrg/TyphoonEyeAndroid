@@ -57,6 +57,8 @@ describe("path allowlist", () => {
     expectError("/v1/qweather/v7/tropical/storm-list?basin=NP&year=26", 400, "invalid_year");
     expectError("/v1/qweather/v7/tropical/storm-list?basin=NP&year=1999", 400, "invalid_year");
     expectError("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2028", 400, "invalid_year");
+    expectError("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2027", 400, "invalid_year");
+    expectError("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2024", 400, "invalid_year");
   });
 
   it("accepts tropical-depression style ids", () => {

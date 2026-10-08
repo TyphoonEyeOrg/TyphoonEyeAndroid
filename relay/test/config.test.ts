@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ALERT_CRON_INTERVAL_MINUTES, KEEP_UNREFRESHED_MS } from "../src/alerts";
+import { DEFAULT_DAILY_BUDGET } from "../src/budget";
 import toml from "../wrangler.toml?raw";
 
 /** wrangler.toml is the single place for cron and rate limits; keep code/docs in sync with it. */
@@ -31,5 +32,11 @@ describe("wrangler.toml", () => {
     expect(/\[observability\]\s*\nenabled\s*=\s*false/.test(toml)).toBe(true);
     expect(/^logpush\s*=\s*false/m.test(toml)).toBe(true);
     expect(/^workers_dev\s*=\s*false/m.test(toml)).toBe(true);
+  });
+
+  it("sets the daily upstream budgets as plain vars, matching the code defaults", () => {
+    const v = (name: string) => Number(new RegExp(`^${name}\\s*=\\s*"(\\d+)"`, "m").exec(toml)?.[1]);
+    expect(v("JUHE_DAILY_BUDGET")).toBe(DEFAULT_DAILY_BUDGET.juhe);
+    expect(v("QWEATHER_DAILY_BUDGET")).toBe(DEFAULT_DAILY_BUDGET.qweather);
   });
 });

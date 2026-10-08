@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clientKey, handleFetch } from "../src/index";
-import { clientRequest, FakeCache, FakeLimiter, FakeUpstream, json, JUHE_OK_EMPTY, makeDeps, makeEnv, QW_OK, SECRETS } from "./helpers";
+import { cachedKeys, clientRequest, FakeCache, FakeLimiter, FakeUpstream, json, JUHE_OK_EMPTY, makeDeps, makeEnv, QW_LIST, QW_OK, qwListKey, SECRETS, seedList } from "./helpers";
 
 const T0 = Date.UTC(2026, 9, 8, 1, 0, 0);
 
@@ -36,7 +36,9 @@ describe("forwarding", () => {
       "X-QW-Api-Key": "client-supplied",
       Authorization: "Bearer client",
     });
-    await handleFetch(request, makeEnv(), makeDeps(upstream, { now: T0 }));
+    const env = makeEnv();
+    seedList(env.RELAY_KV, qwListKey(), QW_LIST, T0);
+    await handleFetch(request, env, makeDeps(upstream, { now: T0 }));
 
     const headers = [...upstream.requests[0].headers.keys()].sort();
     expect(headers).toEqual(["accept", "user-agent", "x-qw-api-key"]);
@@ -94,7 +96,7 @@ describe("caching", () => {
   });
 
   it("refetches a list after 10 minutes and a detail after 30", async () => {
-    const upstream = new FakeUpstream((r) => json(r.url.includes("storm-list") ? QW_OK : { code: "200", track: [] }));
+    const upstream = new FakeUpstream((r) => json(r.url.includes("storm-list") ? QW_LIST : { code: "200", track: [] }));
     const env = makeEnv();
     const clock = { now: T0 };
     const get = (path: string) => handleFetch(clientRequest(path), env, makeDeps(upstream, clock, null));
@@ -120,7 +122,7 @@ describe("caching", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).error_code).toBe(10012);
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
-    expect(env.RELAY_KV.store.size).toBe(0);
+    expect(cachedKeys(env.RELAY_KV)).toEqual([]);
   });
 });
 
@@ -153,7 +155,7 @@ describe("failures and limits", () => {
       expect(res.status).toBe(502);
       expect(await res.json()).toEqual({ error: "upstream_unavailable" });
       expect(upstream.requests).toHaveLength(1);
-      expect(env.RELAY_KV.store.size).toBe(0);
+      expect(cachedKeys(env.RELAY_KV)).toEqual([]);
       expect(cache.store.size).toBe(0);
     });
   }
@@ -165,12 +167,13 @@ describe("failures and limits", () => {
     const cache = new FakeCache();
     const res = await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), env, makeDeps(upstream, { now: T0 }, cache));
     expect(res.status).toBe(502);
-    expect(env.RELAY_KV.store.size).toBe(0);
+    expect(cachedKeys(env.RELAY_KV)).toEqual([]);
     expect(cache.store.size).toBe(0);
   });
 
   it("maps provider 5xx to 502 and passes 4xx through", async () => {
     const env = makeEnv();
+    seedList(env.RELAY_KV, qwListKey(), QW_LIST, T0);
     const r500 = await handleFetch(
       clientRequest("/v1/qweather/v7/tropical/storm-track?stormid=NP_2609"),
       env,

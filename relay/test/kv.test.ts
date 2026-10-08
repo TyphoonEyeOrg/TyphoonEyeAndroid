@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ALERTS_KV_KEY, refreshAlerts, type AlertsState } from "../src/alerts";
 import { handleFetch } from "../src/index";
-import { clientRequest, FakeKV, FakeUpstream, json, makeDeps, makeEnv } from "./helpers";
+import { clientRequest, FakeKV, FakeUpstream, json, JUHE_LIST, JUHE_LIST_KEY, makeDeps, makeEnv, QW_LIST, qwListKey, seedList } from "./helpers";
 
 const T0 = Date.UTC(2026, 9, 8, 1, 0, 0);
 
@@ -33,13 +33,14 @@ describe("best-effort KV on the request path", () => {
   it("returns 200 with the provider body when the KV write throws", async () => {
     const body = { reason: "success", error_code: 0, result: { data: { tfid: "202609", points: [] } } };
     const kv = new WriteLimitedKV();
+    seedList(kv, JUHE_LIST_KEY, JUHE_LIST, T0);
     const upstream = new FakeUpstream(() => json(body));
     const res = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/detail?tfid=202609"), makeEnv({ RELAY_KV: kv }), makeDeps(upstream, { now: T0 }));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=1800");
-    expect(kv.failedPuts).toBe(1);
+    expect(kv.failedPuts).toBe(2); // the detail and the budget counter
     // Minimal log line: nothing about the request.
     expect(warn).toHaveBeenCalledWith("relay: KV write failed");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("202609");
@@ -84,17 +85,18 @@ describe("best-effort KV on the request path", () => {
       }
     }
     const kv = new SlowKV();
+    seedList(kv, qwListKey(), QW_LIST, T0);
     const pending: Promise<unknown>[] = [];
     const deps = { ...makeDeps(new FakeUpstream(() => json({ code: "200", track: [] })), { now: T0 }, null), waitUntil: (p: Promise<unknown>) => void pending.push(p) };
 
     const res = await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-track?stormid=NP_2609"), makeEnv({ RELAY_KV: kv }), deps);
 
     expect(res.status).toBe(200);
-    expect(pending).toHaveLength(1);
-    expect(kv.store.size).toBe(0); // response did not wait for KV
+    expect(pending).toHaveLength(2); // cache write + budget counter
+    expect(kv.store.size).toBe(1); // only the seeded list: response did not wait for KV
     release();
     await Promise.all(pending);
-    expect(kv.store.size).toBe(1);
+    expect(kv.store.size).toBe(3);
   });
 });
 

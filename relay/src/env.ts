@@ -41,6 +41,9 @@ export interface Env {
   /** Plain vars from wrangler.toml. */
   ALERT_STORM_RADIUS_KM?: string;
   MAX_ALERT_POINTS_PER_RUN?: string;
+  /** Global daily provider-call budgets (counted per UTC+8 day in KV; see budget.ts). */
+  JUHE_DAILY_BUDGET?: string;
+  QWEATHER_DAILY_BUDGET?: string;
 }
 
 /** Injected so tests can run without the Workers runtime. */

@@ -50,7 +50,7 @@ A build made without keys (for example a local build without `local.properties` 
 
 #### Both builds
 
-- Map tiles come from map tile providers (e.g. Amap, OpenStreetMap/Carto-style sources) depending on basemap settings.  
+- Map tiles are requested directly from the basemap provider: OpenFreeMap (OpenStreetMap data) by default, or Amap for mainland China if selected. If the map style can't load, the app falls back to MapLibre's demo tiles (demotiles.maplibre.org).  
 - Third-party providers process requests under **their own** privacy policies and terms.  
 - If live data cannot be loaded and nothing is cached, the app offers an optional, clearly labeled demo mode with bundled fictional storms.  
 
@@ -110,7 +110,7 @@ https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/issues
 - **定位（可选）：** 仅在开启相关预警并授权后，于设备本地估算与台风距离；可缓存最近位置标签。不会上传到台风眼自有服务器。  
 - **F-Droid 版的气象数据：** 应用内不含任何 API 密钥。台风数据请求经 Cloudflare 发往台风眼自己的中转服务器（`te-relay.seamain.org`，源码见 `relay/`），由中转服务器持有密钥，向第三方服务商（和风 / 聚合）获取数据。中转服务器会用到你的 IP 地址做限流，但不保存，也不记录请求日志；Cloudflare 作为托管方按其自身隐私政策处理连接。你的位置不会发给中转服务器：中转服务器定时获取一组固定沿海城市的台风相关官方预警，所有用户拿到同一份列表，附近的预警在本机筛选；因此目前只覆盖沿海地区（距所列城市 150 公里以内），更远的地区只显示应用自己的强度提醒。  
 - **GitHub 版的气象数据：** 构建时内置密钥，直接请求聚合、和风等第三方；授权定位后，官方预警按你的大致位置（保留两位小数，约 1 公里）向和风查询。  
-- **两个版本：** 地图瓦片直接请求所选瓦片服务（如高德）。第三方服务适用对方隐私条款。无法获取实时数据且本机没有缓存时，可选择进入明确标注的演示模式（内置虚构台风）。  
+- **两个版本：** 底图来自 OpenFreeMap（OpenStreetMap 数据），中国大陆可选高德瓦片，瓦片请求直接发给对应服务；样式加载失败时会退到 MapLibre 的演示瓦片。第三方服务适用对方隐私条款。无法获取实时数据且本机没有缓存时，可选择进入明确标注的演示模式（内置虚构台风）。  
 - **更新：** GitHub 渠道可能检查 GitHub Releases；F-Droid 渠道关闭该能力。  
 - **设置与通知：** 保存在本机；通知内容由本机根据已获取的风暴数据生成。  
 

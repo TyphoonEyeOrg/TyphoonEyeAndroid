@@ -70,6 +70,21 @@ export function json(body: unknown, status = 200): Response {
 
 export const JUHE_OK_EMPTY = { reason: "success", error_code: 0, result: { data: [] } };
 export const QW_OK = { code: "200", storm: [] };
+/** Lists that contain the ids most tests ask for (Juhe `202609`, QWeather `NP_2609`). */
+export const JUHE_LIST = { reason: "success", error_code: 0, result: { data: [{ tfid: "202609", name: "巴威", lat: "21.5", lng: "116.5" }] } };
+export const QW_LIST = { code: "200", storm: [{ id: "NP_2609", name: "Bavi", basin: "NP", year: "2026", isActive: "1" }] };
+export const JUHE_LIST_KEY = "v1:juhe:fapigw/typhoon/active";
+export const qwListKey = (year = 2026) => `v1:qweather:v7/tropical/storm-list?basin=NP&year=${year}`;
+
+/** Puts a list answer into KV as the relay would have stored it at [fetchedAtMs]. */
+export function seedList(kv: FakeKV, key: string, body: unknown, fetchedAtMs: number): void {
+  kv.store.set(key, JSON.stringify({ fetchedAtMs, body: JSON.stringify(body) }));
+}
+
+/** Response-cache entries in KV (ignores budget counters and refresh gates). */
+export function cachedKeys(kv: FakeKV): string[] {
+  return [...kv.store.keys()].filter((k) => k.startsWith("v1:"));
+}
 
 export function clientRequest(path: string, headers: Record<string, string> = {}): Request {
   return new Request(`https://te-relay.seamain.org${path}`, {

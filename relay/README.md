@@ -6,7 +6,8 @@ It is reached at `https://te-relay.seamain.org` (hard-coded as `RELAY_BASE_URL` 
 
 - **Keys stay here.** The Juhe key and the QWeather credentials (JWT signing key or API key) are Worker secrets. The app contains none.
 - **Allowlist only.** Exactly the provider calls the app makes, with validated parameters.
-  Responses are the providers' JSON, unchanged, so the app parses them with the same code
+  Detail / track / forecast only for storm ids that are in the current list (see
+  [Quota protection](#quota-protection)). Responses are the providers' JSON, unchanged, so the app parses them with the same code
   as the GitHub build.
 - **Shared cache.** Lists 10 min, details / track / forecast 30 min (same as the app's own
   TTLs, TYP-51). Edge cache per Cloudflare location, then KV (global), then the provider.
@@ -33,16 +34,31 @@ Unknown query parameters are ignored (not forwarded, not part of the cache key).
 | Relay path | Upstream | Validation | Cache |
 |---|---|---|---|
 | `/v1/juhe/fapigw/typhoon/active` | `https://apis.juhe.cn/fapigw/typhoon/active?key=…` | – | 10 min |
-| `/v1/juhe/fapigw/typhoon/detail?tfid=` | `…/fapigw/typhoon/detail?key=…&tfid=` | `^\d{4}[A-Z]?\d{2}$` | 30 min |
-| `/v1/qweather/v7/tropical/storm-list?basin=NP&year=` | `{QWEATHER_HOST}/v7/tropical/storm-list` | basin `NP`, year 2000…next year | 10 min |
-| `/v1/qweather/v7/tropical/storm-track?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-track` | `^NP_[0-9A-Z]{4}$` | 30 min |
-| `/v1/qweather/v7/tropical/storm-forecast?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-forecast` | `^NP_[0-9A-Z]{4}$` | 30 min |
+| `/v1/juhe/fapigw/typhoon/detail?tfid=` | `…/fapigw/typhoon/detail?key=…&tfid=` | `^\d{4}[A-Z]?\d{2}$`, in the Juhe active list | 30 min |
+| `/v1/qweather/v7/tropical/storm-list?basin=NP&year=` | `{QWEATHER_HOST}/v7/tropical/storm-list` | basin `NP`, current or previous year (UTC+8)¹ | 10 min |
+| `/v1/qweather/v7/tropical/storm-track?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-track` | `^NP_[0-9A-Z]{4}$`, in the storm-list of its year (`NP_26xx` → 2026) | 30 min |
+| `/v1/qweather/v7/tropical/storm-forecast?stormid=` | `{QWEATHER_HOST}/v7/tropical/storm-forecast` | same as storm-track | 30 min |
 | `/v1/alerts` | KV (written by the cron job) | – | 5 min |
 | `/v1/health` | – (`{ok, sources:{juhe,qweather}, alertsUpdatedAtMs}`) | – | 1 min |
 
-Relay status codes: `429` rate limited (`Retry-After: 60`), `502` provider unreachable or
-provider 5xx, `503` that provider has no secret configured. Provider 4xx answers and
-provider-level errors (Juhe `error_code`, QWeather `code`) are passed through unchanged.
+¹ On 31 December from 18:00 UTC+8 the next year is accepted too (devices east of UTC+8
+are already in January and the app asks for its local year).
+
+Relay status codes (body `{"error": "<code>"}`):
+
+| Status | `error` | Meaning |
+|---|---|---|
+| `400` | `invalid_<param>` | parameter fails validation (incl. a year outside the window) |
+| `404` | `not_found` | unknown path |
+| `404` | `unknown_storm` | storm id not in the current list of that source, or of a year outside the window; no provider call (cached 60 s) |
+| `429` | `rate_limited` | per-client rate limit (`Retry-After: 60`) |
+| `502` | `upstream_unavailable` | provider unreachable, provider 5xx, or the storm list needed for the id check could not be fetched |
+| `503` | `source_not_configured` | that provider has no secret configured |
+| `503` | `budget_exhausted` | daily budget for that provider used up and no earlier answer stored (`Retry-After` = seconds until 00:00 UTC+8) |
+
+Provider 4xx answers and provider-level errors (Juhe `error_code`, QWeather `code`) are
+passed through unchanged. Over budget with an earlier answer stored, the relay returns it
+with `200`, `X-Relay-Stale: 1` and `Cache-Control: max-age=60`.
 
 `/v1/alerts` response:
 
@@ -63,6 +79,32 @@ within 150 km of the user (all points without location). Inland users farther th
 from every point get no official warnings from this list (coastal coverage only); the app
 still shows its own intensity alerts for nearby or very strong storms.
 
+## Quota protection
+
+All F-Droid users share one Juhe and one QWeather account, so the relay limits what a
+single client (or a bug) can make it spend:
+
+1. **Known storm ids only.** A detail / track / forecast request reaches the provider only
+   for an id in the latest list of that source: the Juhe active list for `tfid`, the
+   QWeather storm-list of the id's year for `stormid` (current and previous year; past
+   storms of those years are allowed if their list has them). The list is read from the
+   edge cache or KV (any age). If the id is missing and the list is older than 10 min, the
+   list is refreshed **at most once per 10 min** (gate in the edge cache and KV) and checked
+   again; otherwise the answer is `404 unknown_storm` with no provider call. Enumerating
+   ids therefore costs at most one list call per 10 min, not one call per id.
+2. **Year window.** storm-list only for basin `NP` and the current or previous UTC+8 year.
+3. **Global daily budget** per provider (`JUHE_DAILY_BUDGET` = 400, `QWEATHER_DAILY_BUDGET`
+   = 4000 in `wrangler.toml` `[vars]`; change and redeploy). Every provider call (app
+   traffic and cron) is counted in KV under `budget:v1:<source>:<YYYY-MM-DD>` (UTC+8 date),
+   so the budget resets at 00:00 UTC+8. Over budget, requests get the last good answer (KV
+   keeps answers for 6 h for this) or `503 budget_exhausted` with `Retry-After` until
+   midnight; the cron job skips its run and never queries more points than remain.
+   QWeather's budget covers the cron's weather-alert calls too (up to 1,920/day).
+   Best effort: KV has no atomic increment and is eventually consistent, so concurrent
+   requests may undercount a little, and if KV fails the relay **fails open** (serves the
+   request, logs `relay: KV read failed` / `write failed`, nothing else).
+4. Per-client rate limits ([Rate limits](#rate-limits)).
+
 ## Cron job and provider cost
 
 Every 30 minutes (`[triggers] crons` in `wrangler.toml`; keep `ALERT_CRON_INTERVAL_MINUTES`
@@ -77,6 +119,8 @@ in `src/alerts.ts` in sync, a test checks both):
    refreshed every 30–60 min. A point not re-queried keeps its last answer for up to 2 hours
    (4 cron intervals).
 4. If every alert query fails, or the KV write fails, the previous list is kept.
+5. Calls count against the daily budget (see [Quota protection](#quota-protection)); the
+   run is skipped while the QWeather budget is used up.
 
 QWeather weather-alert calls (worst case, 40 points every run while a storm is active):
 40 × 48 runs/day = **1,920 per active-storm day**. QWeather prices warnings in the "weather
@@ -100,7 +144,10 @@ second to the same key**; reads are 100,000/day. The relay writes:
 | Juhe detail, per active storm (30-min freshness) | ≈ 48 |
 | QWeather storm-list, only when Juhe is unavailable | ≈ 144 |
 | QWeather track + forecast, per active storm, only when Juhe is unavailable | ≈ 96 |
+| Daily budget counters (one write per request that reached a provider, one per cron run) | ≈ the provider writes above + 48 |
+| Known-storm refresh gate (only when an unknown id forces a list refresh) | ≤ 144 per list |
 
+The budget counters roughly double the cache writes; the figures below are without them.
 With Juhe working: at most ≈ 192 + 48 × storms, about 340/day with 3 active storms. If both
 sources end up in use on the same day (Juhe failing part of the time): ≈ 336 + 144 × storms,
 about 770/day with 3 storms, 910 with 4 and over 1,000 with 5. Simultaneous misses in several Cloudflare
@@ -114,6 +161,9 @@ providers** (one per location per freshness window instead of one globally), whi
 provider quota. A failed cron write keeps the previous alert list (the app ignores lists
 older than 6 h). The **Workers Paid** plan (USD 5/month) includes 1 million KV writes per
 month and lifts this limit; the 1 write/second per key limit stays but is harmless here.
+While writes are refused the daily budget counters cannot grow either, so the budget stops
+limiting until the KV limit resets (fail open); the known-id check still works from the
+lists in KV and the edge cache. Another reason to use Workers Paid in storm season.
 
 ## Deploy (owner, once)
 
@@ -197,8 +247,9 @@ Per client IP (salted hash) and per Cloudflare location, set in `wrangler.toml`
 The limits are loose on purpose: carrier-grade NAT puts many mobile users in mainland
 China behind one public IP. One app refresh is about 2–5 requests and the app throttles
 manual refreshes to once a minute, so 600/min leaves room for well over a hundred users on
-one IP. `RL_UPSTREAM` is what protects provider quota from someone enumerating storm ids;
-cache hits never count against it. Over a limit the relay answers `429` with
+one IP. `RL_UPSTREAM` limits cache misses per client; cache hits never count against it.
+Storm-id enumeration and the shared provider quota are covered by the known-id check and
+the daily budget ([Quota protection](#quota-protection)), which hold across all clients. Over a limit the relay answers `429` with
 `Retry-After: 60`, and the app keeps showing its cached data. A test
 (`test/config.test.ts`) pins the values, so update it together with `wrangler.toml`.
 
