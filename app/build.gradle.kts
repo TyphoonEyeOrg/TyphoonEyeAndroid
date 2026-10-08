@@ -125,7 +125,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Empty = bundled asset://map_style.json (Carto raster). Override if needed.
+        // Empty = OpenFreeMap (ui/util/MapBasemap.kt → OpenFreeMap). Override if needed.
         buildConfigField(
             "String",
             "MAPLIBRE_STYLE_URL",
