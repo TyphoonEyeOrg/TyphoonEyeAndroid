@@ -123,12 +123,14 @@ class TyphoonAlertNotifier(
         val big = buildString {
             append(alert.body)
             if (alert.instruction.isNotBlank()) {
-                append("\n\n防御指南：\n")
+                append("\n\n")
+                append(appContext.getString(R.string.alert_guidance_label))
+                append("\n")
                 append(alert.instruction)
             }
             if (alert.sender.isNotBlank()) {
-                append("\n\n发布单位：")
-                append(alert.sender)
+                append("\n\n")
+                append(appContext.getString(R.string.alert_issuer_label, alert.sender))
             }
         }
 
@@ -264,13 +266,25 @@ class TyphoonAlertNotifier(
 
     private fun severityLabel(alert: EmergencyAlert): String {
         val color = when (alert.colorCode.lowercase()) {
-            "red" -> "红色"
-            "orange" -> "橙色"
-            "yellow" -> "黄色"
-            "blue" -> "蓝色"
-            else -> alert.severity.label
+            "red" -> appContext.getString(R.string.alert_color_red)
+            "orange" -> appContext.getString(R.string.alert_color_orange)
+            "yellow" -> appContext.getString(R.string.alert_color_yellow)
+            "blue" -> appContext.getString(R.string.alert_color_blue)
+            else -> appContext.getString(alert.severity.labelRes())
         }
-        return if (alert.eventName.isNotBlank()) "${alert.eventName}${color}预警" else color
+        return if (alert.eventName.isNotBlank()) {
+            appContext.getString(R.string.alert_summary_format, alert.eventName, color)
+        } else {
+            color
+        }
+    }
+
+    private fun AlertSeverity.labelRes(): Int = when (this) {
+        AlertSeverity.Extreme -> R.string.alert_severity_extreme
+        AlertSeverity.Severe -> R.string.alert_severity_severe
+        AlertSeverity.Moderate -> R.string.alert_severity_moderate
+        AlertSeverity.Minor -> R.string.alert_severity_minor
+        AlertSeverity.Unknown -> R.string.alert_severity_unknown
     }
 
     private fun colorFor(alert: EmergencyAlert): Int = when (alert.colorCode.lowercase()) {

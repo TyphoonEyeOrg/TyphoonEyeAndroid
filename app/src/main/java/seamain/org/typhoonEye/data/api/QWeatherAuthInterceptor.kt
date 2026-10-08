@@ -31,15 +31,15 @@ class QWeatherAuthInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         if (!hasCredentials) {
             throw IOException(
-                "和风天气凭证未配置。请在 local.properties 设置 QWEATHER_API_KEY，" +
-                    "或配置 QWEATHER_KID + QWEATHER_PROJECT_ID + QWEATHER_PRIVATE_KEY（见 local.properties.example）"
+                "QWeather credentials not configured. Set QWEATHER_API_KEY, or " +
+                    "QWEATHER_KID + QWEATHER_PROJECT_ID + QWEATHER_PRIVATE_KEY (see local.properties.example)"
             )
         }
 
         val builder = chain.request().newBuilder()
         if (apiKey.isNotBlank()) {
             // Official API KEY header (also used in Postman as X-QW-Api-Key)
-            builder.header("X-QW-Api-Key", apiKey)
+            builder.header(API_KEY_HEADER, apiKey)
         } else {
             builder.header("Authorization", "Bearer ${currentJwt()}")
         }
@@ -63,9 +63,13 @@ class QWeatherAuthInterceptor(
             tokenExpiresAtMs = now + 900_000
             jwt
         } catch (e: IllegalArgumentException) {
-            throw IOException("和风 JWT 生成失败: ${e.message}", e)
+            throw IOException("QWeather JWT generation failed: ${e.message}", e)
         } catch (e: Exception) {
-            throw IOException("和风 JWT 生成失败: ${e.message}", e)
+            throw IOException("QWeather JWT generation failed: ${e.message}", e)
         }
+    }
+
+    companion object {
+        const val API_KEY_HEADER = "X-QW-Api-Key"
     }
 }

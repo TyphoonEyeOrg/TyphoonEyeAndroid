@@ -117,18 +117,6 @@ fun destinationPoint(
     return Math.toDegrees(φ2) to Math.toDegrees(λ2)
 }
 
-/** Single-line summary, e.g. "280 km" or "最大 280 km · 平均 252 km". */
-fun WindRadiiKm.displayLabel(): String {
-    val max = maxKm.toInt()
-    if (!hasAny) return "—"
-    return if (isSymmetric) {
-        "$max km"
-    } else {
-        val avg = avgKm.toInt()
-        if (avg > 0 && avg != max) "最大 ${max} km · 平均 ${avg} km" else "最大 ${max} km"
-    }
-}
-
 /** Localized single-line summary. */
 fun WindRadiiKm.displayLabel(context: android.content.Context): String {
     val max = maxKm.toInt()

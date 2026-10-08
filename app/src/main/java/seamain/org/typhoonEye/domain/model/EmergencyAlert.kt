@@ -19,12 +19,13 @@ data class EmergencyAlert(
     val isCancel: Boolean = false
 )
 
-enum class AlertSeverity(val rank: Int, val label: String) {
-    Extreme(4, "特别严重"),
-    Severe(3, "严重"),
-    Moderate(2, "较重"),
-    Minor(1, "一般"),
-    Unknown(0, "未知")
+/** Display labels are string resources (alert_severity_*), resolved in the notifier. */
+enum class AlertSeverity(val rank: Int) {
+    Extreme(4),
+    Severe(3),
+    Moderate(2),
+    Minor(1),
+    Unknown(0)
 }
 
 enum class AlertSource { Official, Intensity }

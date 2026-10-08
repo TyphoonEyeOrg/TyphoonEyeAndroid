@@ -3,21 +3,28 @@ package seamain.org.typhoonEye.data.repository
 import android.util.Log
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import retrofit2.HttpException
+import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.domain.model.DataSource
+import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.SourceFailure
+import seamain.org.typhoonEye.domain.model.SourceFailureKind
 import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonDataError
+import seamain.org.typhoonEye.domain.model.TyphoonDetailUnavailableError
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
 import javax.inject.Inject
-import javax.inject.Named
 
 /**
  * Cache-first typhoon repository:
@@ -25,21 +32,37 @@ import javax.inject.Named
  *    force a fetch, but no more often than [MIN_FORCE_INTERVAL_MS].
  * 2) Remote: prefer Juhe, fallback QWeather. A Juhe detail is only re-fetched when the list's
  *    update time (`endtime`) for that storm changed, so a refresh costs 1 + changed storms.
- * 3) On remote failure → serve Room cache with a stale message.
+ * 3) On remote failure → serve Room cache with a typed stale reason.
  * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
+ *
+ * Failures are typed ([TyphoonDataError]); the UI resolves localized text.
+ * A direct-mode build without any API key (e.g. a local GitHub-flavor build without
+ * `local.properties` keys) yields [NoDataSourceConfiguredError] without touching the network.
+ * The F-Droid build goes through TyphoonEye's relay ([DataSourceConfig.viaRelay]): both
+ * sources are always available there and the app sends no key.
  */
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
-    @Named("juhe_key") private val juheKey: String,
-    private val qWeatherAuth: QWeatherAuthInterceptor,
+    private val config: DataSourceConfig,
     private val localDataSource: TyphoonLocalDataSource,
     private val syncStore: FeedSyncStore,
     private val clock: WallClock
 ) : TyphoonRepository {
 
     private val qWeatherConfigured: Boolean
-        get() = qWeatherAuth.hasCredentials
+        get() = config.qWeatherEnabled
+
+    private val juheConfigured: Boolean
+        get() = config.juheEnabled
+
+    /** Null in relay mode: no `key` parameter is sent. */
+    private val juheKey: String?
+        get() = config.juheKeyParam
+
+    /** True when at least one remote data source is usable in this build (always via relay). */
+    val hasAnyDataSource: Boolean
+        get() = config.hasAnyDataSource
 
     private val tag = "TyphoonRepository"
 
@@ -48,7 +71,7 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private class FetchOutcome(
         val typhoons: List<Typhoon>? = null,
-        val error: String? = null
+        val failure: SourceFailure? = null
     )
 
     override suspend fun getCachedFeed(): TyphoonFeed? {
@@ -93,22 +116,20 @@ class DefaultTyphoonRepository @Inject constructor(
                 )
             }
 
+            val error = remote.exceptionOrNull() as? TyphoonDataError
+                ?: DataSourcesFailedError(emptyList())
             if (cachedList.isNotEmpty()) {
-                Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache")
+                Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache (${error.message})")
                 return@withLock Result.success(
                     TyphoonFeed(
                         typhoons = cachedList.resolved(now),
                         fromCache = true,
-                        staleMessage = remote.exceptionOrNull()?.message
-                            ?: "网络请求失败",
+                        staleReason = error,
                         fetchedAtEpochMs = lastFetch ?: latestCachedAt()
                     )
                 )
             }
-            Result.failure(
-                remote.exceptionOrNull()
-                    ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
-            )
+            Result.failure(error)
         }
 
     override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
@@ -148,55 +169,50 @@ class DefaultTyphoonRepository @Inject constructor(
         points.size > 1 || forecastPoints.isNotEmpty()
 
     private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
-        val errors = ArrayList<String>()
+        if (!hasAnyDataSource) {
+            Log.i(tag, "No data source configured in this build (no relay, no JUHE_KEY / QWeather credentials)")
+            return Result.failure(NoDataSourceConfiguredError())
+        }
 
-        if (juheKey.isBlank()) {
-            errors.add("聚合 JUHE_KEY 未配置")
-        } else {
+        val failures = ArrayList<SourceFailure>()
+
+        if (juheConfigured) {
             val juhe = fetchFromJuhe(cachedById)
-            val data = juhe.typhoons
-            if (data != null) {
-                return Result.success(data)
-            }
-            juhe.error?.let { errors.add(it) }
+            juhe.typhoons?.let { return Result.success(it) }
+            juhe.failure?.let { failures.add(it) }
         }
 
-        if (!qWeatherConfigured) {
-            errors.add("和风凭证未配置（QWEATHER_API_KEY 或 JWT）")
-        } else {
+        if (qWeatherConfigured) {
             val qWeather = fetchFromQWeather()
-            val data = qWeather.typhoons
-            if (data != null) {
-                return Result.success(data)
-            }
-            qWeather.error?.let { errors.add(it) }
+            qWeather.typhoons?.let { return Result.success(it) }
+            qWeather.failure?.let { failures.add(it) }
         }
 
-        val detail = if (errors.isEmpty()) {
-            "所有数据源均失败"
-        } else {
-            errors.joinToString("；")
-        }
-        return Result.failure(
-            Exception("$detail。请检查 local.properties（参考 local.properties.example）")
-        )
+        return Result.failure(DataSourcesFailedError(failures))
     }
 
     private suspend fun fetchRemoteDetail(id: String): Result<Typhoon> {
-        if (!id.startsWith("NP_") && juheKey.isNotBlank()) {
+        if (!hasAnyDataSource) {
+            return Result.failure(NoDataSourceConfiguredError())
+        }
+        val failures = ArrayList<SourceFailure>()
+
+        if (!id.startsWith("NP_") && juheConfigured) {
             try {
                 val response = juheApi.getTyphoonDetail(juheKey, id)
                 if (response.errorCode == 0 && response.result?.data != null) {
                     return Result.success(response.result.data.toDomain())
                 }
                 Log.w(tag, "Juhe detail error: ${response.reason} (${response.errorCode})")
+                failures.add(juheFailure(response.errorCode, response.reason))
             } catch (e: Exception) {
                 Log.e(tag, "Juhe detail request failed", e)
+                failures.add(exceptionFailure(DataSource.Juhe, e))
             }
         }
 
         if (!qWeatherConfigured) {
-            return Result.failure(Exception("无法获取台风详情: $id（和风凭证未配置）"))
+            return Result.failure(TyphoonDetailUnavailableError(id, failures))
         }
 
         // Keep the caller/nav id stable. QWeather storm id is only for the HTTP path;
@@ -210,7 +226,7 @@ class DefaultTyphoonRepository @Inject constructor(
                 val typhoon = Typhoon(
                     id = id,
                     name = stormId,
-                    englishName = stormId,
+                    englishName = "",
                     status = if (track.isActive == "1") "active" else "dissipated",
                     strong = infoNow?.type?.let { qWeatherTypeToStrong(it) }.orEmpty(),
                     points = track.track.map { it.toDomain() }.ifEmpty {
@@ -221,12 +237,13 @@ class DefaultTyphoonRepository @Inject constructor(
                 return Result.success(typhoon)
             }
             Log.e(tag, "QWeather track error code: ${track.code}")
+            failures.add(qWeatherFailure(track.code))
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
-            return Result.failure(Exception("无法获取台风详情: $id（${e.message}）"))
+            failures.add(exceptionFailure(DataSource.QWeather, e))
         }
 
-        return Result.failure(Exception("无法获取台风详情: $id"))
+        return Result.failure(TyphoonDetailUnavailableError(id, failures))
     }
 
     private suspend fun fetchFromJuhe(cachedById: Map<String, Typhoon>): FetchOutcome {
@@ -267,25 +284,15 @@ class DefaultTyphoonRepository @Inject constructor(
                     Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe, reused $reused cached detail(s)")
                     FetchOutcome(typhoons = typhoons)
                 }
-                10001, 10002 -> {
-                    val msg = "聚合 KEY 无效（${listResponse.errorCode}: ${listResponse.reason}）"
-                    Log.e(tag, msg)
-                    FetchOutcome(error = msg)
-                }
-                10012, 10013, 10022, 10023 -> {
-                    val msg = "聚合配额受限（${listResponse.errorCode}）"
-                    Log.w(tag, "$msg, fallback to QWeather")
-                    FetchOutcome(error = msg)
-                }
                 else -> {
-                    val msg = "聚合错误（${listResponse.errorCode}: ${listResponse.reason}）"
-                    Log.e(tag, msg)
-                    FetchOutcome(error = msg)
+                    val failure = juheFailure(listResponse.errorCode, listResponse.reason)
+                    Log.w(tag, "Juhe list failed: ${failure.describe()}, falling back")
+                    FetchOutcome(failure = failure)
                 }
             }
         } catch (e: Exception) {
             Log.e(tag, "Juhe request failed", e)
-            FetchOutcome(error = "聚合请求失败: ${e.message}")
+            FetchOutcome(failure = exceptionFailure(DataSource.Juhe, e))
         }
     }
 
@@ -294,9 +301,8 @@ class DefaultTyphoonRepository @Inject constructor(
             val year = Calendar.getInstance().get(Calendar.YEAR).toString()
             val listResponse = qWeatherApi.getStormList(basin = "NP", year = year)
             if (listResponse.code != "200") {
-                val msg = "和风列表错误 code=${listResponse.code}"
-                Log.e(tag, msg)
-                return FetchOutcome(error = msg)
+                Log.e(tag, "QWeather list error code=${listResponse.code}")
+                return FetchOutcome(failure = qWeatherFailure(listResponse.code))
             }
 
             val activeStorms = listResponse.storm.filter { it.isActive == "1" }
@@ -318,9 +324,51 @@ class DefaultTyphoonRepository @Inject constructor(
             FetchOutcome(typhoons = typhoons)
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
-            FetchOutcome(error = "和风请求失败: ${e.message}")
+            FetchOutcome(failure = exceptionFailure(DataSource.QWeather, e))
         }
     }
+
+    private fun juheFailure(errorCode: Int, reason: String?): SourceFailure {
+        val kind = when (errorCode) {
+            10001, 10002 -> keyRejected()
+            10012, 10013, 10022, 10023 -> SourceFailureKind.QuotaExceeded
+            else -> SourceFailureKind.ApiError
+        }
+        return SourceFailure(DataSource.Juhe, kind, code = errorCode.toString(), detail = reason)
+    }
+
+    /** QWeather v7 status codes: 401/403 auth, 402/429 quota. */
+    private fun qWeatherFailure(code: String?): SourceFailure {
+        val kind = when (code) {
+            "401", "403" -> keyRejected()
+            "402", "429" -> SourceFailureKind.QuotaExceeded
+            else -> SourceFailureKind.ApiError
+        }
+        return SourceFailure(DataSource.QWeather, kind, code = code)
+    }
+
+    /**
+     * A rejected key is the user's to fix only in direct mode. Through the relay the key is
+     * ours, so the user sees a plain service error instead of "API key rejected".
+     */
+    private fun keyRejected(): SourceFailureKind =
+        if (config.viaRelay) SourceFailureKind.ApiError else SourceFailureKind.InvalidKey
+
+    /**
+     * HTTP errors (e.g. from the relay: 429 rate limit, 502/503 upstream trouble) keep their
+     * status code; everything else (offline, timeout, TLS, parse error) is a network failure.
+     */
+    private fun exceptionFailure(source: DataSource, e: Exception): SourceFailure =
+        if (e is HttpException) {
+            val kind = when (e.code()) {
+                429 -> SourceFailureKind.QuotaExceeded
+                401, 403 -> keyRejected()
+                else -> SourceFailureKind.ApiError
+            }
+            SourceFailure(source, kind, code = e.code().toString(), detail = e.message())
+        } else {
+            SourceFailure(source, SourceFailureKind.Network, detail = e.message)
+        }
 
     companion object {
         const val LIST_TTL_MS: Long = 10L * 60 * 1000

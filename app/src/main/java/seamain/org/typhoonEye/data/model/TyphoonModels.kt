@@ -335,7 +335,8 @@ fun QWeatherStormInfo.toDomain(
     return Typhoon(
         id = id,
         name = name,
-        englishName = id,
+        // QWeather has no English name; leave blank rather than repeat the id.
+        englishName = "",
         status = if (isActive == "1") "active" else "dissipated",
         strong = strongLabel,
         points = points,

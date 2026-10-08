@@ -16,6 +16,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
 import java.util.concurrent.TimeUnit
@@ -84,7 +85,10 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             result.onFailure { err ->
                 Log.w(TAG, "Background refresh failed: ${err.message}")
             }
-            val remoteFailed = result.isFailure || result.getOrNull()?.staleMessage != null
+            // A direct-mode build without any API key can never succeed remotely: don't back
+            // off and retry for it, just wait for the next period.
+            val failure = result.exceptionOrNull() ?: result.getOrNull()?.staleReason
+            val remoteFailed = failure != null && failure !is NoDataSourceConfiguredError
             retryOrSucceed(remoteFailed)
         } catch (e: Exception) {
             Log.e(TAG, "Worker error", e)

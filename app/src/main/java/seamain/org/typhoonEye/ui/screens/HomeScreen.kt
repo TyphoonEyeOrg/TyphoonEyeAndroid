@@ -5,7 +5,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,12 +16,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,19 +78,26 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.SourceFailure
 import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonDataError
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.util.distanceKmFrom
 import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonUiState
+import seamain.org.typhoonEye.ui.components.DemoDataBanner
 import seamain.org.typhoonEye.ui.components.IntensityBadge
+import seamain.org.typhoonEye.ui.localizedDetails
 import seamain.org.typhoonEye.ui.components.StatusChip
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
@@ -96,6 +108,7 @@ import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.formatPressure
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.latestPoint
+import seamain.org.typhoonEye.ui.util.listSubtitle
 import seamain.org.typhoonEye.ui.util.localizedLabel
 import seamain.org.typhoonEye.ui.util.moveLabel
 
@@ -116,7 +129,8 @@ fun HomeScreen(
     onLoadDemo: () -> Unit,
     onOpenSettings: () -> Unit,
     onTyphoonClick: (Typhoon) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onExitDemo: () -> Unit = {}
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pullState = rememberPullToRefreshState()
@@ -179,6 +193,7 @@ fun HomeScreen(
                 contentKey = {
                     when (it) {
                         is TyphoonUiState.Loading -> "loading"
+                        is TyphoonUiState.NoDataSource -> "no-data-source"
                         is TyphoonUiState.Error -> "error"
                         is TyphoonUiState.Success -> "success"
                     }
@@ -189,13 +204,28 @@ fun HomeScreen(
             ) { state ->
                 when (state) {
                     is TyphoonUiState.Loading -> LoadingState()
-                    is TyphoonUiState.Error -> ErrorState(
-                        message = state.message,
+                    is TyphoonUiState.NoDataSource -> NoDataSourceState(
+                        onViewDemo = onLoadDemo,
                         onRetry = onRefresh
                     )
-                    is TyphoonUiState.Success -> {
+                    is TyphoonUiState.Error -> ErrorState(
+                        failures = state.failures,
+                        detail = state.detail,
+                        onRetry = onRefresh,
+                        onViewDemo = onLoadDemo
+                    )
+                    is TyphoonUiState.Success -> Column(modifier = Modifier.fillMaxSize()) {
+                        // Pinned outside the list so it can never scroll out of view.
+                        if (dataMode == DataMode.Demo) {
+                            DemoDataBanner(
+                                onExit = onExitDemo,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
                             contentPadding = PaddingValues(bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
@@ -206,15 +236,15 @@ fun HomeScreen(
                                     dataMode = dataMode,
                                     lastUpdated = lastUpdated,
                                     fromCache = state.fromCache,
-                                    offline = state.staleMessage != null,
+                                    offline = state.staleReason != null,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                 )
                             }
                             // Banner only when the network actually failed, not for a fresh cache hit.
-                            if (state.fromCache && state.staleMessage != null) {
+                            if (state.fromCache && state.staleReason != null) {
                                 item(key = "offline-banner") {
                                     OfflineCacheBanner(
-                                        message = state.staleMessage,
+                                        reason = state.staleReason,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                                     )
                                 }
@@ -264,9 +294,13 @@ fun HomeScreen(
 
 @Composable
 private fun OfflineCacheBanner(
-    message: String?,
+    reason: TyphoonDataError?,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val message = (reason as? DataSourcesFailedError)?.failures?.localizedDetails(context)
+    // Cache left over from a build that had keys: say why it can't refresh.
+    val noDataSource = reason is NoDataSourceConfiguredError
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -280,11 +314,21 @@ private fun OfflineCacheBanner(
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Text(
-                text = message?.takeIf { it.isNotBlank() }
-                    ?: stringResource(R.string.offline_cache_body),
+                text = if (noDataSource) {
+                    stringResource(R.string.no_data_source_title)
+                } else {
+                    stringResource(R.string.offline_cache_body)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
+            if (!message.isNullOrBlank()) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
         }
     }
 }
@@ -520,12 +564,7 @@ fun TyphoonListCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        val subtitle = buildList {
-                            if (typhoon.englishName.isNotBlank() && typhoon.englishName != typhoon.name) {
-                                add(typhoon.englishName)
-                            }
-                            add(typhoon.id)
-                        }.joinToString(" · ")
+                        val subtitle = typhoon.listSubtitle()
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
@@ -728,19 +767,95 @@ private fun EmptyListState(
     }
 }
 
+/**
+ * Vertically centered when content fits, scrollable when it doesn't
+ * (long explanations on small screens / landscape / large font scale).
+ * Scrollable content also keeps pull-to-refresh working.
+ */
 @Composable
-private fun ErrorState(
-    message: String,
+private fun CenteredScrollColumn(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val minHeight = maxHeight
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = minHeight)
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            content = content
+        )
+    }
+}
+
+/**
+ * Build has no data source (no relay, no API key). Explains why there is no live data and
+ * offers clearly labeled demo data. Deliberately not styled as an error.
+ */
+@Composable
+private fun NoDataSourceState(
+    onViewDemo: () -> Unit,
     onRetry: () -> Unit
 ) {
+    val title = stringResource(R.string.no_data_source_title)
+    CenteredScrollColumn(
+        modifier = Modifier.semantics { contentDescription = title }
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Cyclone,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            modifier = Modifier.size(64.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.no_data_source_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.no_data_source_authority),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onViewDemo) {
+            Text(stringResource(R.string.action_view_demo))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(onClick = onRetry) {
+            Icon(Icons.Outlined.Refresh, contentDescription = null)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.retry))
+        }
+    }
+}
+
+@Composable
+private fun ErrorState(
+    failures: List<SourceFailure>,
+    detail: String?,
+    onRetry: () -> Unit,
+    onViewDemo: () -> Unit
+) {
+    val context = LocalContext.current
     val errorCd = stringResource(R.string.cd_load_failed)
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp)
-            .semantics { contentDescription = errorCd },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    val failureLines = failures.localizedDetails(context)
+    CenteredScrollColumn(
+        modifier = Modifier.semantics { contentDescription = errorCd }
     ) {
         Icon(
             imageVector = Icons.Filled.CloudOff,
@@ -755,15 +870,38 @@ private fun ErrorState(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = message,
+            text = stringResource(R.string.error_sources_failed),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
+        if (failureLines != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = failureLines,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+        if (!detail.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.error_details_format, detail),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = onRetry) {
             Icon(Icons.Outlined.Refresh, contentDescription = null)
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.retry))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(onClick = onViewDemo) {
+            Text(stringResource(R.string.action_view_demo))
         }
     }
 }

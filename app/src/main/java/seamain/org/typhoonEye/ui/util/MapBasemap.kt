@@ -19,13 +19,28 @@ enum class MapBasemap {
     /** Amap Web raster tiles (GCJ-02). */
     Amap,
 
-    /** Carto Voyager / dark_all (WGS-84). */
+    /** OpenFreeMap vector style, OpenStreetMap data (WGS-84). See [OpenFreeMap]. */
     OpenStreet;
 
     companion object {
         fun fromStorage(value: String?): MapBasemap =
             entries.find { it.name.equals(value, ignoreCase = true) } ?: Auto
     }
+}
+
+/**
+ * International basemap: OpenFreeMap public instance (https://openfreemap.org).
+ * No API key, no registration. Its terms allow the public instance to stop without
+ * notice, so the style URL lives only here; change [STYLES_BASE_URL] to switch.
+ * Attribution comes from the style's sources and MapLibre shows it automatically.
+ */
+object OpenFreeMap {
+    const val STYLES_BASE_URL = "https://tiles.openfreemap.org/styles/"
+    const val LIGHT_STYLE = "liberty"
+    const val DARK_STYLE = "dark"
+
+    fun styleUrl(darkTheme: Boolean): String =
+        STYLES_BASE_URL + if (darkTheme) DARK_STYLE else LIGHT_STYLE
 }
 
 /** Effective basemap after resolving [MapBasemap.Auto] / BuildConfig override. */

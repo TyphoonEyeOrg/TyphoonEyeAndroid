@@ -1,7 +1,10 @@
 ## TyphoonEye — local.properties example
 #
 # Copy to project root as local.properties (gitignored).
-# Without keys the app runs in demo / offline-cache mode.
+# The weather API keys below are used ONLY by the `github` flavor (direct calls to Juhe / QWeather).
+# The `fdroid` flavor ignores them: it carries no keys and fetches typhoon data through TyphoonEye's
+# relay (https://te-relay.seamain.org, source in relay/), where the keys are Worker secrets.
+# A `github` build without any key shows "no live data source" and offers a labeled demo mode.
 
 # sdk.dir=/path/to/Android/sdk
 

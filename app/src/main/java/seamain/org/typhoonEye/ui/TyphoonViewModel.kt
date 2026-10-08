@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.DistributionConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.location.LocationProvider
@@ -25,7 +26,12 @@ import seamain.org.typhoonEye.data.preferences.UserSettings
 import seamain.org.typhoonEye.data.update.AppUpdateRepository
 import seamain.org.typhoonEye.domain.model.AppUpdateInfo
 import seamain.org.typhoonEye.domain.model.AppUpdateState
+import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.SourceFailure
 import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonDataError
+import seamain.org.typhoonEye.domain.model.TyphoonDetailUnavailableError
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
@@ -41,6 +47,7 @@ import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatObservationTime
+import seamain.org.typhoonEye.ui.util.localizeIntensityLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -51,9 +58,33 @@ sealed class TyphoonUiState {
     data class Success(
         val typhoons: List<Typhoon>,
         val fromCache: Boolean = false,
-        val staleMessage: String? = null
+        /** Why live data was unavailable when [fromCache]; localized by the UI. */
+        val staleReason: TyphoonDataError? = null
     ) : TyphoonUiState()
-    data class Error(val message: String) : TyphoonUiState()
+
+    /**
+     * This build has no data source (no relay, no weather API key). Not an error:
+     * the UI explains it and offers clearly labeled demo data instead.
+     */
+    data object NoDataSource : TyphoonUiState()
+
+    /**
+     * Configured sources failed and nothing is cached.
+     * @param failures per-source typed reasons (localized by the UI)
+     * @param detail raw message for unexpected, untyped exceptions only
+     */
+    data class Error(
+        val failures: List<SourceFailure> = emptyList(),
+        val detail: String? = null
+    ) : TyphoonUiState()
+}
+
+/** Maps a failed list load to UI state. Pure, so it is unit-testable. */
+internal fun Throwable.toTyphoonUiState(): TyphoonUiState = when (this) {
+    is NoDataSourceConfiguredError -> TyphoonUiState.NoDataSource
+    is DataSourcesFailedError -> TyphoonUiState.Error(failures = failures)
+    is TyphoonDetailUnavailableError -> TyphoonUiState.Error(failures = failures)
+    else -> TyphoonUiState.Error(detail = message)
 }
 
 enum class DataMode { Live, Demo }
@@ -154,7 +185,7 @@ class TyphoonViewModel @Inject constructor(
                 val active = typhoons.filter { it.status == "active" }
                 // Alerts first, then Live — so Live stays out of Alerting aggregate and stays current.
                 refreshEmergencyAlerts(active, prefs.emergencyAlertsEnabled)
-                liveNotifier.update(active, prefs.liveActivityEnabled)
+                liveNotifier.update(liveNotificationTyphoons(active), prefs.liveActivityEnabled)
             }
         }
         // (Re)schedule the worker only when the Live / alert toggles actually change,
@@ -265,8 +296,16 @@ class TyphoonViewModel @Inject constructor(
 
     fun refreshLiveActivity() {
         val active = _allTyphoons.value.filter { it.status == "active" }
-        liveNotifier.update(active, settings.value.liveActivityEnabled)
+        liveNotifier.update(liveNotificationTyphoons(active), settings.value.liveActivityEnabled)
     }
+
+    /**
+     * Fictional demo storms must never show up as an ongoing system notification
+     * in release builds, where they could be mistaken for real typhoons.
+     * Debug builds keep the preview for development.
+     */
+    private fun liveNotificationTyphoons(active: List<Typhoon>): List<Typhoon> =
+        if (_dataMode.value == DataMode.Demo && !BuildConfig.DEBUG) emptyList() else active
 
     fun canPostLiveNotifications(): Boolean = liveNotifier.canPostNotifications()
 
@@ -287,25 +326,52 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
-    /** Load bundled sample typhoons so UI / Live 状态 can be previewed offline. */
+    /**
+     * Load bundled, clearly labeled sample typhoons so the UI can be explored
+     * without any data source (a build without keys or relay), or when live data
+     * failed to load and nothing is cached. Only ever user-initiated.
+     *
+     * Release builds post no system notifications for demo data (no sample
+     * alerts, no Live notification); use Settings → "Send test alert" to
+     * preview alert styling. Debug builds keep the full notification preview.
+     */
     fun loadDemoData() {
         refreshJob?.cancel()
         viewModelScope.launch {
             val mock = getMockTyphoons()
+            // Mode first so the alerts/Live collector never treats sample data as live.
+            _dataMode.value = DataMode.Demo
             _allTyphoons.value = mock
             _uiState.value = TyphoonUiState.Success(mock, fromCache = false)
-            _dataMode.value = DataMode.Demo
             _lastUpdatedAtMs.value = System.currentTimeMillis()
             _query.value = ""
             _intensityFilter.value = null
             _selectedTyphoon.value = null
             _isRefreshing.value = false
-            if (settings.value.emergencyAlertsEnabled) {
-                alertNotifier.publishDemo(warningRepository.demoAlerts())
+            if (BuildConfig.DEBUG) {
+                if (settings.value.emergencyAlertsEnabled) {
+                    alertNotifier.publishDemo(warningRepository.demoAlerts())
+                }
+                // Re-assert Live after alerts so OEM Alerting aggregate cannot suppress it.
+                liveNotifier.update(mock.filter { it.status == "active" }, settings.value.liveActivityEnabled)
+            } else {
+                liveNotifier.update(emptyList(), settings.value.liveActivityEnabled)
             }
-            // Re-assert Live after alerts so OEM Alerting aggregate cannot suppress it.
-            liveNotifier.update(mock.filter { it.status == "active" }, settings.value.liveActivityEnabled)
         }
+    }
+
+    /** Leave demo mode and try live data again (lands on NoDataSource without keys). */
+    fun exitDemo() {
+        refreshJob?.cancel()
+        _dataMode.value = DataMode.Live
+        _allTyphoons.value = emptyList()
+        _selectedTyphoon.value = null
+        _lastUpdatedAtMs.value = null
+        _query.value = ""
+        _intensityFilter.value = null
+        _uiState.value = TyphoonUiState.Loading
+        // Normal TTL rules: leaving demo should not force an extra network fetch.
+        loadTyphoons(forceRefresh = false)
     }
 
     /** Settings: push sample emergency alerts for preview. */
@@ -381,9 +447,7 @@ class TyphoonViewModel @Inject constructor(
                 .onSuccess { feed -> applyFeed(feed) }
                 .onFailure { error ->
                     if (!hadData) {
-                        _uiState.value = TyphoonUiState.Error(
-                            error.message ?: appContext.getString(R.string.error_unknown)
-                        )
+                        _uiState.value = error.toTyphoonUiState()
                     }
                 }
             _isRefreshing.value = false
@@ -391,13 +455,14 @@ class TyphoonViewModel @Inject constructor(
     }
 
     private fun applyFeed(feed: TyphoonFeed) {
+        // Mode first so the alerts/Live collector never sees live data tagged as demo.
+        _dataMode.value = DataMode.Live
         _allTyphoons.value = feed.typhoons
         _uiState.value = TyphoonUiState.Success(
             typhoons = feed.typhoons,
             fromCache = feed.fromCache,
-            staleMessage = feed.staleMessage
+            staleReason = feed.staleReason
         )
-        _dataMode.value = DataMode.Live
         // Real fetch time, not "now" — cached data must not look freshly fetched.
         _lastUpdatedAtMs.value = feed.fetchedAtEpochMs
         _selectedTyphoon.value?.let { selected ->
@@ -478,12 +543,26 @@ class TyphoonViewModel @Inject constructor(
     fun shareSummary(typhoon: Typhoon): String {
         val last = typhoon.points.lastOrNull()
         return buildString {
+            if (_dataMode.value == DataMode.Demo) {
+                // Never let a fictional storm be forwarded as if it were real.
+                appendLine(appContext.getString(R.string.share_demo_prefix))
+            }
+            val en = typhoon.englishName.trim()
             appendLine(
-                appContext.getString(R.string.share_header, typhoon.name, typhoon.englishName)
+                if (en.isBlank() || en.equals(typhoon.name.trim(), ignoreCase = true)) {
+                    appContext.getString(R.string.share_header_name_only, typhoon.name)
+                } else {
+                    appContext.getString(R.string.share_header, typhoon.name, en)
+                }
             )
             appendLine(appContext.getString(R.string.share_id, typhoon.id))
             if (typhoon.strong.isNotBlank()) {
-                appendLine(appContext.getString(R.string.share_intensity, typhoon.strong))
+                appendLine(
+                    appContext.getString(
+                        R.string.share_intensity,
+                        localizeIntensityLabel(appContext, typhoon.strong)
+                    )
+                )
             }
             if (typhoon.positionDesc.isNotBlank()) {
                 appendLine(appContext.getString(R.string.share_position, typhoon.positionDesc))
@@ -521,15 +600,19 @@ class TyphoonViewModel @Inject constructor(
     private fun nowLabel(): String =
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
+    /**
+     * Fictional sample storms (names/texts localized; intensity and direction
+     * values stay in the Juhe data format so the normal label mapping applies).
+     */
     private fun getMockTyphoons(): List<Typhoon> = listOf(
         Typhoon(
             id = "202609",
-            name = "巴威",
+            name = appContext.getString(R.string.demo_bavi_name),
             englishName = "BAVI",
             status = "active",
             strong = "台风",
-            positionDesc = "距离浙闽交界东南方向约890公里",
-            forecastText = "“巴威”将以每小时20-25公里的速度向西北方向移动，强度变化不大",
+            positionDesc = appContext.getString(R.string.demo_bavi_position),
+            forecastText = appContext.getString(R.string.demo_bavi_forecast),
             startTime = "2026-07-02 08:00",
             endTime = "2026-07-10 14:00",
             points = listOf(
@@ -560,12 +643,12 @@ class TyphoonViewModel @Inject constructor(
         ),
         Typhoon(
             id = "202610",
-            name = "美莎克",
+            name = appContext.getString(R.string.demo_mekkhala_name),
             englishName = "MEKKHALA",
             status = "active",
             strong = "热带风暴",
-            positionDesc = "菲律宾以东洋面",
-            forecastText = "强度维持，总体向西北偏西移动",
+            positionDesc = appContext.getString(R.string.demo_mekkhala_position),
+            forecastText = appContext.getString(R.string.demo_mekkhala_forecast),
             points = listOf(
                 TyphoonPoint("2026-07-09 14:00", 11.2, 137.8, 1000, 16, "8", "热带风暴", "NW", "18"),
                 TyphoonPoint(
@@ -588,7 +671,7 @@ class TyphoonViewModel @Inject constructor(
         ),
         Typhoon(
             id = "202605",
-            name = "黑格比",
+            name = appContext.getString(R.string.demo_hagupit_name),
             englishName = "HAGUPIT",
             status = "dissipated",
             strong = "热带低压",

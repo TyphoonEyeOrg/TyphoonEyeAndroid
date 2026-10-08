@@ -208,6 +208,7 @@
     <string name="timeline_intensity">強度 %1$s</string>
     <string name="timeline_move">移動 %1$s</string>
     <string name="share_header">【颱風眼】%1$s（%2$s）</string>
+    <string name="share_header_name_only">【颱風眼】%1$s</string>
     <string name="share_id">編號：%1$s</string>
     <string name="share_intensity">強度：%1$s</string>
     <string name="share_position">位置：%1$s</string>
@@ -253,4 +254,47 @@
     <string name="oss_jetpack_desc">本地 SQLite 資料庫持久化、響應式配置儲存與背景 Live 狀態定時調度</string>
     <string name="oss_eddsa_desc">用於和風天氣 API 的 Ed25519 / EdDSA 密碼學數位簽章演算法實現</string>
     <string name="oss_test_desc">Kotlin Flow 響應式資料流測試庫與 Mockito 單元測試模擬框架</string>
+
+    <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
+    <string name="no_data_source_title">此版本未設定即時資料來源</string>
+    <string name="no_data_source_body">此版本不含天氣 API 金鑰，因此無法載入即時颱風資料。資料來源為選用項目，需在自行建置應用程式時設定。你仍可使用明確標示的範例資料體驗應用程式。</string>
+    <string name="no_data_source_authority">如需真實颱風警報，請以當地氣象機構發布為準。</string>
+    <string name="action_view_demo">查看示範資料</string>
+    <string name="action_exit_demo">結束示範</string>
+    <string name="demo_banner_title">範例資料，非真實颱風</string>
+    <string name="demo_banner_body">這些颱風皆為虛構，僅用於展示應用程式功能，請勿據此做任何防災決策。</string>
+    <string name="share_demo_prefix">【範例資料，非真實颱風】</string>
+    <string name="error_sources_failed">無法從已設定的資料來源載入颱風資料，請檢查網路後重試。</string>
+    <string name="error_details_format">詳情：%1$s</string>
+    <string name="source_juhe">聚合數據</string>
+    <string name="source_qweather">和風天氣</string>
+    <string name="source_failure_invalid_key">%1$s：API 金鑰無效</string>
+    <string name="source_failure_quota">%1$s：呼叫配額已用盡</string>
+    <string name="source_failure_api">%1$s：服務回傳錯誤（%2$s）</string>
+    <string name="source_failure_network">%1$s：網路請求失敗</string>
+    <string name="demo_bavi_position">距離浙閩交界東南方約890公里（範例）</string>
+    <string name="demo_bavi_forecast">範例預報：將以每小時20–25公里的速度向西北方移動，強度變化不大。</string>
+    <string name="demo_mekkhala_position">菲律賓以東洋面（範例）</string>
+    <string name="demo_mekkhala_forecast">範例預報：強度維持，大致向西北偏西移動。</string>
+    <string name="demo_alert_sender">颱風眼（範例）</string>
+    <string name="demo_alert_red_title">範例提醒：颱風紅色警報（非真實）</string>
+    <string name="demo_alert_red_body">這是一則測試通知。範例中的颱風「巴威」為虛構，並未發布任何真實警報。</string>
+    <string name="demo_alert_red_instruction">遇到真實警報時，請遵從當地政府機關的指引。</string>
+    <string name="demo_alert_orange_title">範例提醒：颱風橙色警報（非真實）</string>
+    <string name="demo_alert_orange_body">這是一則用於預覽提醒樣式的測試通知，並未發布任何真實警報。</string>
+    <string name="alert_guidance_label">防禦指南：</string>
+    <string name="alert_issuer_label">發布單位：%1$s</string>
+    <string name="alert_color_red">紅色</string>
+    <string name="alert_color_orange">橙色</string>
+    <string name="alert_color_yellow">黃色</string>
+    <string name="alert_color_blue">藍色</string>
+    <string name="alert_severity_extreme">特別嚴重</string>
+    <string name="alert_severity_severe">嚴重</string>
+    <string name="alert_severity_moderate">較重</string>
+    <string name="alert_severity_minor">一般</string>
+    <string name="alert_severity_unknown">未知</string>
+    <string name="alert_summary_format">%1$s%2$s警報</string>
+    <string name="demo_bavi_name">巴威</string>
+    <string name="demo_mekkhala_name">米克拉</string>
+    <string name="demo_hagupit_name">哈格比</string>
 </resources>

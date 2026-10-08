@@ -59,6 +59,7 @@ import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.domain.model.AppUpdateState
+import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonViewModel
 import seamain.org.typhoonEye.ui.components.AppUpdateHost
 import seamain.org.typhoonEye.ui.navigation.AppDestination
@@ -385,6 +386,7 @@ fun TyphoonApp(
                 onFilterChange = viewModel::setIntensityFilter,
                 onRefresh = { viewModel.refresh() },
                 onLoadDemo = viewModel::loadDemoData,
+                onExitDemo = viewModel::exitDemo,
                 onOpenSettings = {
                     navController.navigate(AppDestination.Settings) {
                         launchSingleTop = true
@@ -480,6 +482,7 @@ fun TyphoonApp(
                         shareText = viewModel.shareSummary(typhoon),
                         userLocation = userLocation,
                         mapBasemap = settings.mapBasemap,
+                        isDemo = dataMode == DataMode.Demo,
                         onShare = { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
