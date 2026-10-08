@@ -1,6 +1,7 @@
 import pointsFile from "../data/coastal-points.json";
 import type { Deps, Env } from "./env";
 import { jsonResponse } from "./http";
+import { kvGetJson, kvPut } from "./kv";
 import { cachedJson } from "./proxy";
 import { qweatherBaseUrl, qweatherConfigured } from "./qweatherAuth";
 import { LIST_TTL_SECONDS, type UpstreamRoute } from "./routes";
@@ -165,14 +166,14 @@ export interface RefreshSummary {
 export async function refreshAlerts(env: Env, deps: Deps): Promise<RefreshSummary> {
   if (!qweatherConfigured(env)) return { skipped: "qweather_not_configured" };
   const now = deps.now();
-  const previous = (await env.RELAY_KV.get(ALERTS_KV_KEY, { type: "json" })) as AlertsState | null;
+  const previous = (await kvGetJson(env, ALERTS_KV_KEY)) as AlertsState | null;
 
   const storms = await activeStorms(env, deps);
   if (!storms) return { skipped: "storm_list_unavailable" };
 
   if (storms.count === 0) {
     const empty: AlertsState = { version: 1, updatedAtMs: now, cursor: 0, activeStorms: 0, points: [] };
-    await env.RELAY_KV.put(ALERTS_KV_KEY, JSON.stringify(empty));
+    if (!(await kvPut(env, ALERTS_KV_KEY, JSON.stringify(empty)))) return { skipped: "kv_write_failed", activeStorms: 0 };
     return { activeStorms: 0, selected: 0, queried: 0, failed: 0, withAlerts: 0 };
   }
 
@@ -201,7 +202,10 @@ export async function refreshAlerts(env: Env, deps: Deps): Promise<RefreshSummar
   }
 
   const state: AlertsState = { version: 1, updatedAtMs: now, cursor: next, activeStorms: storms.count, points };
-  await env.RELAY_KV.put(ALERTS_KV_KEY, JSON.stringify(state));
+  // A failed write leaves the previous list in KV (served as before); next run retries.
+  if (!(await kvPut(env, ALERTS_KV_KEY, JSON.stringify(state)))) {
+    return { skipped: "kv_write_failed", activeStorms: storms.count, selected: selected.length, queried: batch.length, failed };
+  }
   return {
     activeStorms: storms.count,
     selected: selected.length,
@@ -219,7 +223,7 @@ function notExpired(alert: QWeatherAlert, nowMs: number): boolean {
 
 /** Public shape (see the app's RelayModels.kt): only points that currently have alerts. */
 export async function serveAlerts(env: Env, deps: Deps): Promise<Response> {
-  const state = (await env.RELAY_KV.get(ALERTS_KV_KEY, { type: "json", cacheTtl: 60 })) as AlertsState | null;
+  const state = (await kvGetJson(env, ALERTS_KV_KEY, 60)) as AlertsState | null;
   const now = deps.now();
   const points = (state?.points ?? [])
     .map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, alerts: p.alerts.filter((a) => notExpired(a, now)) }))

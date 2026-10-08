@@ -11,6 +11,8 @@ It is reached at `https://te-relay.seamain.org` (hard-coded as `RELAY_BASE_URL` 
 - **Shared cache.** Lists 10 min, details / track / forecast 30 min (same as the app's own
   TTLs, TYP-51). Edge cache per Cloudflare location, then KV (global), then the provider.
   Only successful provider answers are stored in KV; error answers are cached for 60 s.
+  KV is best effort: if a KV read or write fails (e.g. Free-plan write limit), requests still
+  succeed from the edge cache or the provider (see [KV limits](#kv-limits-workers-free-plan)).
 - **No user locations.** A cron job fetches typhoon-related official warnings for a fixed
   list of coastal points ([`data/coastal-points.json`](data/coastal-points.json), 54
   points: coastal mainland China, Hong Kong, Macau, Taiwan, Philippines, Japan, Korea,
@@ -68,7 +70,7 @@ Every 15 minutes (`[triggers] crons` in `wrangler.toml`):
 3. At most `MAX_ALERT_POINTS_PER_RUN` (40) points per run, rotating, so a run stays under
    the Workers Free plan limit of 50 subrequests. A point not re-queried keeps its last
    answer for up to 2 hours.
-4. If every alert query fails, the previous list is kept.
+4. If every alert query fails, or the KV write fails, the previous list is kept.
 
 QWeather weather-alert calls (worst case, all points every run while a storm is active):
 40 × 96 runs/day = 3,840/day. QWeather prices warnings in the "weather and basic services"
@@ -78,6 +80,33 @@ With Juhe positions and a single storm, typically 10–30 points are in range.
 Typhoon (tropical) calls are priced separately by QWeather (no free tier, CNY 0.003 per
 request); the shared cache keeps those to roughly 1 list call per 10 min plus 2 calls per
 active storm per 30 min, independent of the number of users.
+
+## KV limits (Workers Free plan)
+
+Workers KV on the Free plan allows **1,000 writes per day** (per account) and **1 write per
+second to the same key**; reads are 100,000/day. The relay writes:
+
+| What | Writes/day |
+|---|---|
+| Juhe typhoon list (10-min freshness; the cron refreshes it every run) | ≈ 96–144 |
+| Alert list (cron, every 15 min) | 96 |
+| Juhe detail, per active storm (30-min freshness) | ≈ 48 |
+| QWeather storm-list, only when Juhe is unavailable | ≈ 144 |
+| QWeather track + forecast, per active storm, only when Juhe is unavailable | ≈ 96 |
+
+With Juhe working: ≈ 240 + 48 × storms, about 400/day with 3 active storms. If both
+sources end up in use on the same day (Juhe failing part of the time): ≈ 384 + 144 × storms,
+about 800/day with 3 storms and over 1,000 with 4. Simultaneous misses in several Cloudflare
+locations can add a few duplicate writes.
+
+When a write is refused (daily limit, per-key rate, or any KV error), nothing breaks: KV
+access is best effort (`src/kv.ts`). The request still returns the provider's answer with
+200, and the write runs after the response (`waitUntil`). Until the limit resets (00:00 UTC),
+responses are shared only through each location's edge cache, so **more requests reach the
+providers** (one per location per freshness window instead of one globally), which costs
+provider quota. A failed cron write keeps the previous alert list (the app ignores lists
+older than 6 h). The **Workers Paid** plan (USD 5/month) includes 1 million KV writes per
+month and lifts this limit; the 1 write/second per key limit stays but is harmless here.
 
 ## Deploy (owner, once)
 

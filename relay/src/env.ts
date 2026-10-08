@@ -43,4 +43,6 @@ export interface Deps {
   fetch: typeof fetch;
   cache: CacheLike | null;
   now: () => number;
+  /** Workers `ctx.waitUntil` in the fetch handler; absent in tests and the cron job. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }

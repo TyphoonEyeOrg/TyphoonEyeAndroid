@@ -1,5 +1,6 @@
 import type { Deps, Env } from "./env";
 import { errorResponse, jsonResponse } from "./http";
+import { inBackground, kvGetJson, kvPut } from "./kv";
 import { cacheKey, type UpstreamRoute } from "./routes";
 import { callUpstream, sourceConfigured } from "./upstream";
 
@@ -27,16 +28,17 @@ async function edgePut(deps: Deps, key: string, response: Response): Promise<voi
 
 /** Fresh copy from KV (shared by all Cloudflare locations), or null. */
 export async function readFresh(route: UpstreamRoute, env: Env, nowMs: number): Promise<{ body: string; ageSeconds: number } | null> {
-  const stored = (await env.RELAY_KV.get(cacheKey(route), { type: "json" })) as Stored | null;
+  const stored = (await kvGetJson(env, cacheKey(route))) as Stored | null;
   if (!stored || typeof stored.body !== "string" || typeof stored.fetchedAtMs !== "number") return null;
   const ageSeconds = (nowMs - stored.fetchedAtMs) / 1000;
   if (ageSeconds < 0 || ageSeconds >= route.ttlSeconds) return null;
   return { body: stored.body, ageSeconds };
 }
 
-export async function writeFresh(route: UpstreamRoute, env: Env, nowMs: number, body: string): Promise<void> {
+/** Best effort (see kv.ts): never throws; false when KV did not store it. */
+export async function writeFresh(route: UpstreamRoute, env: Env, nowMs: number, body: string): Promise<boolean> {
   const value: Stored = { fetchedAtMs: nowMs, body };
-  await env.RELAY_KV.put(cacheKey(route), JSON.stringify(value), {
+  return kvPut(env, cacheKey(route), JSON.stringify(value), {
     expirationTtl: Math.max(60, route.ttlSeconds * 2),
   });
 }
@@ -78,7 +80,8 @@ export async function proxy(route: UpstreamRoute, env: Env, deps: Deps, clientKe
   }
 
   if (result.ok) {
-    await writeFresh(route, env, now, result.body);
+    // A failed KV write (e.g. Free-plan write limit) must not fail the request.
+    await inBackground(deps, writeFresh(route, env, now, result.body));
     const response = jsonResponse(result.body, 200, route.ttlSeconds);
     await edgePut(deps, key, response);
     return response;

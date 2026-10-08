@@ -13,17 +13,23 @@
 import { refreshAlerts, serveAlerts, ALERTS_KV_KEY, type AlertsState } from "./alerts";
 import type { CacheLike, Deps, Env } from "./env";
 import { errorResponse, jsonResponse } from "./http";
+import { kvGetJson } from "./kv";
 import { proxy } from "./proxy";
 import { qweatherConfigured } from "./qweatherAuth";
 import { matchRoute, RouteError } from "./routes";
 import { sourceConfigured } from "./upstream";
 
-export function defaultDeps(): Deps {
+interface Ctx {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+export function defaultDeps(ctx?: Ctx): Deps {
   const caches = (globalThis as unknown as { caches?: { default?: CacheLike } }).caches;
   return {
     fetch: (input, init) => fetch(input, init),
     cache: caches?.default ?? null,
     now: () => Date.now(),
+    waitUntil: ctx ? (promise) => ctx.waitUntil(promise) : undefined,
   };
 }
 
@@ -58,7 +64,7 @@ export async function handleFetch(request: Request, env: Env, deps: Deps): Promi
 
   switch (route.kind) {
     case "health": {
-      const state = (await env.RELAY_KV.get(ALERTS_KV_KEY, { type: "json", cacheTtl: 60 })) as AlertsState | null;
+      const state = (await kvGetJson(env, ALERTS_KV_KEY, 60)) as AlertsState | null;
       const body = JSON.stringify({
         ok: true,
         sources: { juhe: sourceConfigured("juhe", env), qweather: qweatherConfigured(env) },
@@ -74,16 +80,17 @@ export async function handleFetch(request: Request, env: Env, deps: Deps): Promi
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
     try {
-      return await handleFetch(request, env, defaultDeps());
+      // KV writes run after the response (waitUntil) so they never delay or fail it.
+      return await handleFetch(request, env, defaultDeps(ctx));
     } catch {
       // No details: nothing about the request may end up in logs.
       return errorResponse(500, "internal_error");
     }
   },
 
-  async scheduled(_controller: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+  async scheduled(_controller: unknown, env: Env, ctx: Ctx): Promise<void> {
     ctx.waitUntil(refreshAlerts(env, defaultDeps()).catch(() => undefined));
   },
 };
