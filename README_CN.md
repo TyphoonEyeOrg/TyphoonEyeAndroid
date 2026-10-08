@@ -84,6 +84,25 @@ cp local.properties.example local.properties
 ./gradlew assembleRelease
 ```
 
+### 本地构建
+
+两个脚本按 CI 的方式构建发布版（需要 JDK 21 和 Android SDK）：
+
+| 脚本 | 版本 | 允许的分支 | 产物 |
+|------|------|------------|------|
+| `scripts/build-github.sh` | GitHub 版（通用包 + 分 ABI，内置密钥） | `master` 或 `v*` 标签 | `dist/github/TyphoonEye-v<版本>-app-github-release.apk`、`…-app-github-split-<abi>-release.apk` |
+| `scripts/build-foss.sh` | F-Droid 版（分 ABI，不含密钥） | `foss` 或 `fdroid-*` 标签，工作区无改动 | `dist/foss/app-fdroid-<abi>-release-signed.apk` |
+
+两个脚本都会跑对应渠道的单元测试，检查每个 APK 的 versionCode 和签名证书，并生成带提交哈希的 `SHA256SUMS`。
+选项：`--skip-tests`、`--debug`（调试签名，输出到 `dist/*-debug/`，不检查签名）、`--force`（允许其他分支；GitHub
+脚本还允许工作区有改动）、`-h`。`build-foss.sh --compare <目录>` 用 `apksigcopier` 与 CI / F-Droid 的 APK 比对。
+
+`local.properties`（参见 [local.properties.example](local.properties.example)）需要 `sdk.dir`（或 `ANDROID_HOME`），
+发布构建还需要 `RELEASE_STORE_FILE`（或 `./release.keystore`）、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_ALIAS`、
+`RELEASE_KEY_PASSWORD`（也可用同名环境变量）。找不到签名文件会直接报错，不会悄悄用调试密钥签名。GitHub 版还会用到数据源密钥。
+`build-foss.sh` 不改动你的工作区：它在临时 `git worktree` 里构建已提交的 HEAD，只写入 `sdk.dir` 和签名配置；
+若在 APK 中发现本地配置的任何密钥值则失败。要得到与 F-Droid 逐字节一致的 APK，请使用 Temurin 21.0.12（与 CI / F-Droid 相同）。
+
 ### 版本号
 
 以根目录 [`version.properties`](version.properties) 为准：
