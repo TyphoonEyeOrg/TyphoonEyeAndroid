@@ -130,6 +130,23 @@ describe("cron refresh", () => {
     expect(((await env.RELAY_KV.get(ALERTS_KV_KEY)) as AlertsState).updatedAtMs).toBe(previous.updatedAtMs);
   });
 
+  it("treats redirected alert queries as failed and never follows them", async () => {
+    const env = makeEnv();
+    const previous: AlertsState = { version: 1, updatedAtMs: T0 - 30 * 60 * 1000, cursor: 0, activeStorms: 1, points: [] };
+    await env.RELAY_KV.put(ALERTS_KV_KEY, JSON.stringify(previous));
+    const upstream = new FakeUpstream((r) =>
+      r.url.includes("juhe")
+        ? json(juheActive([{ lat: "21.5", lng: "116.5" }]))
+        : new Response(null, { status: 302, headers: { Location: "https://evil.example/" } }),
+    );
+
+    const summary = await refreshAlerts(env, makeDeps(upstream, { now: T0 }, null));
+
+    expect(summary.skipped).toBe("all_alert_queries_failed");
+    expect(((await env.RELAY_KV.get(ALERTS_KV_KEY)) as AlertsState).updatedAtMs).toBe(previous.updatedAtMs);
+    expect(upstream.requests.every((r) => r.redirect === "manual" && !r.url.includes("evil.example"))).toBe(true);
+  });
+
   it("does nothing without QWeather credentials", async () => {
     const upstream = new FakeUpstream(() => json({}));
     const summary = await refreshAlerts(makeEnv({ QWEATHER_API_KEY: undefined }), makeDeps(upstream, { now: T0 }, null));

@@ -37,7 +37,28 @@ export async function upstreamRequest(url: string, env: Env, deps: Deps, source:
     const auth = await qweatherAuthHeader(env, deps.now());
     if (auth) headers.set(auth[0], auth[1]);
   }
-  return new Request(url, { method: "GET", headers, redirect: "error" });
+  // "manual", never "follow": a redirect could carry the key (Juhe query parameter, QWeather
+  // header) to another host. Workers rejects redirect "error", so fetchUpstream() turns any
+  // redirect answer into a failure instead.
+  return new Request(url, { method: "GET", headers, redirect: "manual" });
+}
+
+/**
+ * Fetches an upstream request built by upstreamRequest(). A redirect (3xx, or the opaque
+ * redirect a spec-compliant fetch returns for redirect "manual") is never followed and throws
+ * like a network failure, so the proxy answers 502 and nothing is cached.
+ */
+export async function fetchUpstream(request: Request, deps: Deps): Promise<Response> {
+  const response = await deps.fetch(request);
+  if (response.type === "opaqueredirect" || response.status === 0 || (response.status >= 300 && response.status < 400)) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // ignore
+    }
+    throw new Error(`upstream redirect (${response.status})`);
+  }
+  return response;
 }
 
 export function upstreamUrl(route: UpstreamRoute, env: Env): string {
@@ -62,7 +83,7 @@ function providerOk(source: Source, status: number, body: string): boolean {
 /** Throws on network failure; otherwise returns the provider's answer unchanged (scrubbed). */
 export async function callUpstream(route: UpstreamRoute, env: Env, deps: Deps): Promise<UpstreamResult> {
   const request = await upstreamRequest(upstreamUrl(route, env), env, deps, route.source);
-  const response = await deps.fetch(request);
+  const response = await fetchUpstream(request, deps);
   const body = scrubSecrets(await response.text(), env);
   return { status: response.status, body, ok: providerOk(route.source, response.status, body) };
 }

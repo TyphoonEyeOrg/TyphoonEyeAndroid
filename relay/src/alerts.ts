@@ -5,7 +5,7 @@ import { kvGetJson, kvPut } from "./kv";
 import { cachedJson } from "./proxy";
 import { qweatherBaseUrl, qweatherConfigured } from "./qweatherAuth";
 import { LIST_TTL_SECONDS, type UpstreamRoute } from "./routes";
-import { scrubSecrets, sourceConfigured, upstreamRequest } from "./upstream";
+import { fetchUpstream, scrubSecrets, sourceConfigured, upstreamRequest } from "./upstream";
 
 /**
  * Official typhoon warnings without user locations.
@@ -136,7 +136,7 @@ export async function activeStorms(env: Env, deps: Deps): Promise<StormSnapshot 
 async function queryPoint(point: WatchPoint, env: Env, deps: Deps): Promise<QWeatherAlert[] | null> {
   const url = `${qweatherBaseUrl(env)}/weatheralert/v1/current/${point.lat.toFixed(2)}/${point.lon.toFixed(2)}?lang=zh&localTime=true`;
   try {
-    const response = await deps.fetch(await upstreamRequest(url, env, deps, "qweather"));
+    const response = await fetchUpstream(await upstreamRequest(url, env, deps, "qweather"), deps);
     if (response.status !== 200) return null;
     const json = JSON.parse(scrubSecrets(await response.text(), env)) as { alerts?: QWeatherAlert[] };
     return (json.alerts ?? []).filter(isTyphoonRelated);

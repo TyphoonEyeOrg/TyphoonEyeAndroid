@@ -134,6 +134,41 @@ describe("failures and limits", () => {
     expect(await res.json()).toEqual({ error: "upstream_unavailable" });
   });
 
+  it("builds upstream requests with redirect \"manual\" (Workers rejects \"error\")", async () => {
+    const upstream = new FakeUpstream(() => json(JUHE_OK_EMPTY));
+    await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), makeEnv(), makeDeps(upstream, { now: T0 }));
+    await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), makeEnv(), makeDeps(upstream, { now: T0 }));
+    expect(upstream.requests).toHaveLength(2);
+    for (const r of upstream.requests) expect(r.redirect).toBe("manual");
+  });
+
+  for (const status of [301, 302, 307, 308]) {
+    it(`never follows a ${status} redirect: 502, nothing cached, no second request`, async () => {
+      const upstream = new FakeUpstream(
+        () => new Response(null, { status, headers: { Location: "https://evil.example/steal" } }),
+      );
+      const env = makeEnv();
+      const cache = new FakeCache();
+      const res = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, { now: T0 }, cache));
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({ error: "upstream_unavailable" });
+      expect(upstream.requests).toHaveLength(1);
+      expect(env.RELAY_KV.store.size).toBe(0);
+      expect(cache.store.size).toBe(0);
+    });
+  }
+
+  it("treats an opaque redirect (status 0) as a failure too", async () => {
+    const opaque = { type: "opaqueredirect", status: 0, body: null, text: async () => "" } as unknown as Response;
+    const upstream = new FakeUpstream(() => opaque);
+    const env = makeEnv();
+    const cache = new FakeCache();
+    const res = await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), env, makeDeps(upstream, { now: T0 }, cache));
+    expect(res.status).toBe(502);
+    expect(env.RELAY_KV.store.size).toBe(0);
+    expect(cache.store.size).toBe(0);
+  });
+
   it("maps provider 5xx to 502 and passes 4xx through", async () => {
     const env = makeEnv();
     const r500 = await handleFetch(
