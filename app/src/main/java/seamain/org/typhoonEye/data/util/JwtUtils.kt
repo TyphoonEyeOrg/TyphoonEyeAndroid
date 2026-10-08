@@ -14,35 +14,44 @@ import java.util.Base64
  * https://dev.qweather.com/en/docs/configuration/authentication/
  *
  * Header: { "alg": "EdDSA", "kid": "<Credential ID>" }
- * Payload: { "sub": "<Project ID>", "iat": ..., "exp": ... }
+ * Payload: { "iss": "<Developer ID>", "sub": "<Project ID>", "iat": ..., "exp": ... } and
+ * nothing else (QWeather treats other claims as reserved).
  * Authorization: Bearer <jwt>
  */
 object JwtUtils {
 
+    /** Token lifetime; QWeather allows at most 86,400 s. */
+    const val DEFAULT_TTL_SECONDS = 900L
+
     /**
      * @param kid Credential ID from QWeather Console
      * @param projectId Project ID (`sub`)
+     * @param developerId Developer ID from the console's account page (`iss`)
      * @param privateKeyPem Ed25519 PKCS#8 PEM (`-----BEGIN PRIVATE KEY-----` ...)
      */
     fun generateQWeatherJwt(
         kid: String,
         projectId: String,
+        developerId: String,
         privateKeyPem: String,
-        ttlSeconds: Long = 900
+        ttlSeconds: Long = DEFAULT_TTL_SECONDS,
+        nowMs: Long = System.currentTimeMillis()
     ): String {
         require(kid.isNotBlank()) { "QWeather kid (Credential ID) is blank" }
         require(projectId.isNotBlank()) { "QWeather projectId is blank" }
+        require(developerId.isNotBlank()) { "QWeather developerId is blank" }
         require(privateKeyPem.isNotBlank()) { "QWeather private key is blank" }
 
-        val iat = System.currentTimeMillis() / 1000 - 30
+        val iat = nowMs / 1000 - 30
         val exp = iat + ttlSeconds
 
         val headerJson = JSONObject()
             .put("alg", "EdDSA")
-            .put("kid", kid)
+            .put("kid", kid.trim())
             .toString()
         val payloadJson = JSONObject()
-            .put("sub", projectId)
+            .put("iss", developerId.trim())
+            .put("sub", projectId.trim())
             .put("iat", iat)
             .put("exp", exp)
             .toString()

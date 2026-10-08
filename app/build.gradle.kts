@@ -180,6 +180,9 @@ android {
             buildConfigField("String", "QWEATHER_API_KEY", prop("QWEATHER_API_KEY"))
             buildConfigField("String", "QWEATHER_KID", prop("QWEATHER_KID", "QWEATHER_PUBLIC_ID"))
             buildConfigField("String", "QWEATHER_PROJECT_ID", prop("QWEATHER_PROJECT_ID"))
+            // JWT `iss`: developer ID (QWeather console → account). JWT is used only when
+            // KID, PROJECT_ID, DEVELOPER_ID and PRIVATE_KEY are all set; otherwise QWEATHER_API_KEY.
+            buildConfigField("String", "QWEATHER_DEVELOPER_ID", prop("QWEATHER_DEVELOPER_ID"))
             buildConfigField(
                 "String",
                 "QWEATHER_PRIVATE_KEY",
@@ -204,6 +207,7 @@ android {
             buildConfigField("String", "QWEATHER_API_KEY", "\"\"")
             buildConfigField("String", "QWEATHER_KID", "\"\"")
             buildConfigField("String", "QWEATHER_PROJECT_ID", "\"\"")
+            buildConfigField("String", "QWEATHER_DEVELOPER_ID", "\"\"")
             buildConfigField("String", "QWEATHER_PRIVATE_KEY", "\"\"")
             buildConfigField("String", "QWEATHER_HOST", "\"\"")
             buildConfigField("String", "RELAY_BASE_URL", "\"https://te-relay.seamain.org/\"")
