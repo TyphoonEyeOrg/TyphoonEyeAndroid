@@ -84,9 +84,12 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             }
             result.onFailure { err ->
                 Log.w(TAG, "Background refresh failed: ${err.message}")
+                // Keys were removed (or never entered): nothing live to show any more.
+                if (err is NoDataSourceConfiguredError) liveNotifier.cancel()
             }
-            // A build without any API key (F-Droid) can never succeed remotely: don't back off
-            // and retry for it, just wait for the next period.
+            // Credentials come from the same provider as the UI (Settings key → build key).
+            // Without any key a remote fetch can never succeed: don't back off and retry for
+            // it, just wait for the next period.
             val failure = result.exceptionOrNull() ?: result.getOrNull()?.staleReason
             val remoteFailed = failure != null && failure !is NoDataSourceConfiguredError
             retryOrSucceed(remoteFailed)

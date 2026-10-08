@@ -256,7 +256,7 @@
 
     <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
     <string name="no_data_source_title">呢個版本冇設定即時資料來源</string>
-    <string name="no_data_source_body">呢個版本冇包天氣 API 金鑰，所以載入唔到即時颱風資料。資料來源係選用嘅，要自己建置應用程式嗰陣設定。你仲可以用清楚標明嘅範例資料試用。</string>
+    <string name="no_data_source_body">呢個版本冇包天氣 API 金鑰，暫時載入唔到即時颱風資料。你可以喺設定填你自己嘅和風天氣或者聚合數據 API 金鑰，或者用清楚標明嘅範例資料試用。</string>
     <string name="no_data_source_authority">真實颱風警告請以當地氣象機構發布為準。</string>
     <string name="action_view_demo">睇示範資料</string>
     <string name="action_exit_demo">退出示範</string>
@@ -296,4 +296,22 @@
     <string name="demo_bavi_name">巴威</string>
     <string name="demo_mekkhala_name">米克拉</string>
     <string name="demo_hagupit_name">黑格比</string>
+
+    <!-- User-supplied data source keys (Settings) -->
+    <string name="section_data_source_keys">自訂資料來源金鑰</string>
+    <string name="data_source_keys_intro">選用：填你自己嘅和風天氣或者聚合數據 API 金鑰，就可以載入即時颱風資料。喺度填嘅金鑰會優先過應用程式內置嘅金鑰。</string>
+    <string name="data_source_keys_privacy">金鑰只會儲存喺呢部裝置，唔會上傳、唔會寫入記錄，亦唔會包喺備份同裝置轉移入面。</string>
+    <string name="qweather_api_key_label">和風天氣 API Key</string>
+    <string name="qweather_api_host_label">和風天氣 API Host</string>
+    <string name="qweather_api_host_hint">和風天氣主控台入面你帳戶嘅 API Host，例如 abc1234xyz.re.qweatherapi.com</string>
+    <string name="qweather_api_host_invalid">主機名稱唔啱</string>
+    <string name="qweather_api_host_missing_hint">新註冊嘅和風天氣帳戶要填自己嘅 API Host（睇和風天氣主控台）。留空就會用舊嘅公用位址 devapi.qweather.com。</string>
+    <string name="juhe_key_label">聚合數據金鑰</string>
+    <string name="action_save_keys">儲存</string>
+    <string name="action_clear_keys">移除金鑰</string>
+    <string name="data_source_keys_saved">金鑰已儲存，重新整理緊</string>
+    <string name="data_source_keys_cleared">金鑰已移除</string>
+    <string name="cd_show_key">顯示金鑰</string>
+    <string name="cd_hide_key">隱藏金鑰</string>
+    <string name="action_enter_api_key">填 API 金鑰</string>
 </resources>

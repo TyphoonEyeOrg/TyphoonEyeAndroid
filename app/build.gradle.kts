@@ -357,6 +357,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.turbine)
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.compose.material3)

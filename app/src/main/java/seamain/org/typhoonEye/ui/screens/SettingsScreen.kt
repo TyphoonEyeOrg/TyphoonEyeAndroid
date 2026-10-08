@@ -63,9 +63,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.data.credentials.UserDataSourceKeys
 import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.data.preferences.UserSettings
+import seamain.org.typhoonEye.ui.components.DataSourceKeysEditor
 import seamain.org.typhoonEye.ui.util.MapBasemap
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +90,9 @@ fun SettingsScreen(
     inAppUpdatesEnabled: Boolean = true,
     onCheckForUpdates: () -> Unit = {},
     isCheckingUpdates: Boolean = false,
+    dataSourceKeys: UserDataSourceKeys = UserDataSourceKeys(),
+    onSaveDataSourceKeys: (UserDataSourceKeys) -> Unit = {},
+    onClearDataSourceKeys: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -137,6 +142,15 @@ fun SettingsScreen(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // First section: on the F-Droid build this is the only way to get live data.
+            SettingsSection(title = stringResource(R.string.section_data_source_keys)) {
+                DataSourceKeysEditor(
+                    saved = dataSourceKeys,
+                    onSave = onSaveDataSourceKeys,
+                    onClear = onClearDataSourceKeys
+                )
+            }
+
             SettingsSection(title = stringResource(R.string.section_language)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.language_title)) },

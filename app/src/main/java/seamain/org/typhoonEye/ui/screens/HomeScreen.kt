@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -55,6 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -85,7 +87,6 @@ import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
-import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
 import seamain.org.typhoonEye.domain.model.SourceFailure
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonDataError
@@ -205,6 +206,7 @@ fun HomeScreen(
                     is TyphoonUiState.Loading -> LoadingState()
                     is TyphoonUiState.NoDataSource -> NoDataSourceState(
                         onViewDemo = onLoadDemo,
+                        onEnterKey = onOpenSettings,
                         onRetry = onRefresh
                     )
                     is TyphoonUiState.Error -> ErrorState(
@@ -298,8 +300,6 @@ private fun OfflineCacheBanner(
 ) {
     val context = LocalContext.current
     val message = (reason as? DataSourcesFailedError)?.failures?.localizedDetails(context)
-    // Cache left over from a build that had keys: say why it can't refresh.
-    val noDataSource = reason is NoDataSourceConfiguredError
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -313,11 +313,7 @@ private fun OfflineCacheBanner(
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Text(
-                text = if (noDataSource) {
-                    stringResource(R.string.no_data_source_title)
-                } else {
-                    stringResource(R.string.offline_cache_body)
-                },
+                text = stringResource(R.string.offline_cache_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
@@ -803,6 +799,7 @@ private fun CenteredScrollColumn(
 @Composable
 private fun NoDataSourceState(
     onViewDemo: () -> Unit,
+    onEnterKey: () -> Unit,
     onRetry: () -> Unit
 ) {
     val title = stringResource(R.string.no_data_source_title)
@@ -836,11 +833,18 @@ private fun NoDataSourceState(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onViewDemo) {
+        // Primary path to live data: the user's own QWeather / Juhe API key.
+        Button(onClick = onEnterKey) {
+            Icon(Icons.Outlined.Key, contentDescription = null)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.action_enter_api_key))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(onClick = onViewDemo) {
             Text(stringResource(R.string.action_view_demo))
         }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(onClick = onRetry) {
+        TextButton(onClick = onRetry) {
             Icon(Icons.Outlined.Refresh, contentDescription = null)
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.retry))

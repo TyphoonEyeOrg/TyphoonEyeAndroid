@@ -15,7 +15,6 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
@@ -30,6 +29,8 @@ import seamain.org.typhoonEye.data.model.QWeatherStormInfo
 import seamain.org.typhoonEye.data.model.QWeatherStormListResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
+import seamain.org.typhoonEye.data.credentials.DataSourceCredentials
+import seamain.org.typhoonEye.data.credentials.QWeatherCredentials
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
 import seamain.org.typhoonEye.domain.model.DataSource
@@ -54,12 +55,17 @@ class TyphoonRepositoryTest {
 
     private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
 
-    private fun auth(configured: Boolean = true): QWeatherAuthInterceptor =
-        if (configured) {
-            QWeatherAuthInterceptor(apiKey = "test-key")
-        } else {
-            QWeatherAuthInterceptor()
-        }
+    /** Mutable like the real provider: values are read on every call. */
+    private class FakeCredentials(
+        var juhe: String = "",
+        var qWeatherKey: String = ""
+    ) : DataSourceCredentials {
+        override fun juheKey(): String = juhe
+        override fun qWeather(): QWeatherCredentials = QWeatherCredentials(apiKey = qWeatherKey)
+    }
+
+    private fun creds(juheKey: String, qWeatherConfigured: Boolean) =
+        FakeCredentials(juhe = juheKey, qWeatherKey = if (qWeatherConfigured) "test-key" else "")
 
     @Before
     fun setup() {
@@ -72,8 +78,7 @@ class TyphoonRepositoryTest {
         repository = DefaultTyphoonRepository(
             juheApi = juheApi,
             qWeatherApi = qWeatherApi,
-            juheKey = juheKey,
-            qWeatherAuth = auth(configured = true),
+            credentials = creds(juheKey = juheKey, qWeatherConfigured = true),
             localDataSource = localDataSource,
             syncStore = syncStore,
             clock = clock
@@ -221,11 +226,13 @@ class TyphoonRepositoryTest {
         verify(localDataSource).replaceAll(emptyList())
     }
 
-    private fun repoWith(juheKey: String, qWeatherConfigured: Boolean) = DefaultTyphoonRepository(
+    private fun repoWith(juheKey: String, qWeatherConfigured: Boolean) =
+        repoWith(creds(juheKey, qWeatherConfigured))
+
+    private fun repoWith(credentials: DataSourceCredentials) = DefaultTyphoonRepository(
         juheApi = juheApi,
         qWeatherApi = qWeatherApi,
-        juheKey = juheKey,
-        qWeatherAuth = auth(configured = qWeatherConfigured),
+        credentials = credentials,
         localDataSource = localDataSource,
         syncStore = syncStore,
         clock = clock
@@ -249,16 +256,81 @@ class TyphoonRepositoryTest {
     }
 
     @Test
-    fun `getActiveTyphoons without any key still serves existing Room cache`() = runTest {
+    fun `without any key leftover Room cache is kept but not served`() = runTest {
+        // e.g. the user removed their key: show the no-data-source page, not old results.
         val emptyRepo = repoWith(juheKey = "", qWeatherConfigured = false)
         val cached = listOf(Typhoon(id = "202609", name = "BAVI", englishName = "BAVI", status = "active"))
         whenever(localDataSource.getAll()).thenReturn(cached)
+        syncStore.lastListFetchAtMs = nowMs - 60_000 // still inside the 10-min TTL
 
-        val feed = emptyRepo.getActiveTyphoons().getOrThrow()
+        val result = emptyRepo.getActiveTyphoons()
 
-        assertTrue(feed.fromCache)
-        assertTrue(feed.staleReason is NoDataSourceConfiguredError)
-        assertEquals(cached, feed.typhoons)
+        assertTrue(result.exceptionOrNull() is NoDataSourceConfiguredError)
+        assertNull(emptyRepo.getCachedFeed())
+        verify(localDataSource, never()).replaceAll(any())
+    }
+
+    private suspend fun stubJuheEmptyList(key: String) {
+        whenever(juheApi.getActiveTyphoons(key)).thenReturn(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(data = emptyList()))
+        )
+    }
+
+    @Test
+    fun `hasAnyDataSource flips per call without recreating the repository`() = runTest {
+        val credentials = FakeCredentials()
+        val repo = repoWith(credentials)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        assertFalse(repo.hasAnyDataSource)
+        assertTrue(repo.getActiveTyphoons().exceptionOrNull() is NoDataSourceConfiguredError)
+
+        // User enters a Juhe key in Settings: same repository instance picks it up.
+        credentials.juhe = "user-juhe"
+        stubJuheEmptyList("user-juhe")
+        assertTrue(repo.hasAnyDataSource)
+        val live = repo.getActiveTyphoons().getOrThrow()
+        assertFalse(live.fromCache)
+        verify(juheApi).getActiveTyphoons("user-juhe")
+
+        // User removes it again: reflected immediately, even inside the list TTL.
+        credentials.juhe = ""
+        assertFalse(repo.hasAnyDataSource)
+        assertTrue(repo.getActiveTyphoons().exceptionOrNull() is NoDataSourceConfiguredError)
+    }
+
+    @Test
+    fun `juhe key is read per call so a changed key is used on the next fetch`() = runTest {
+        val credentials = FakeCredentials(juhe = "old-key")
+        val repo = repoWith(credentials)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        stubJuheEmptyList("old-key")
+        stubJuheEmptyList("new-key")
+        repo.getActiveTyphoons().getOrThrow()
+
+        credentials.juhe = "new-key"
+        repo.invalidateListFreshness()
+        repo.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        verify(juheApi).getActiveTyphoons("old-key")
+        verify(juheApi).getActiveTyphoons("new-key")
+    }
+
+    @Test
+    fun `invalidateListFreshness clears last fetch and bypasses the 60s force throttle`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        stubJuheEmptyList(juheKey)
+        syncStore.lastListFetchAtMs = nowMs - 5_000
+
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        verify(juheApi, never()).getActiveTyphoons(any()) // throttled: < 60 s
+
+        repository.invalidateListFreshness()
+        assertNull(syncStore.lastListFetchAtMs)
+        val feed = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        verify(juheApi).getActiveTyphoons(juheKey)
+        assertFalse(feed.fromCache)
+        assertEquals(nowMs, syncStore.lastListFetchAtMs)
     }
 
     @Test
@@ -323,6 +395,33 @@ class TyphoonRepositoryTest {
         assertTrue(result.exceptionOrNull() is NoDataSourceConfiguredError)
         verify(juheApi, never()).getTyphoonDetail(any(), any())
         verify(qWeatherApi, never()).getStormTrack(any())
+    }
+
+    @Test
+    fun `without any key cached detail is not served`() = runTest {
+        // Full detail from an earlier key, fresh (inside the 30-min detail TTL).
+        val credentials = FakeCredentials(juhe = juheKey)
+        val repo = repoWith(credentials)
+        whenever(localDataSource.getById("202609")).thenReturn(fullCached("202609", "2026-07-10 14:00:00"))
+        whenever(localDataSource.getCachedAtMs("202609")).thenReturn(nowMs - 60_000)
+        assertTrue(repo.getTyphoonDetail("202609").isSuccess) // sanity: served while keyed
+
+        credentials.juhe = ""
+        val result = repo.getTyphoonDetail("202609")
+
+        assertTrue(result.exceptionOrNull() is NoDataSourceConfiguredError)
+        // Neither the fresh-cache branch nor the failure fallback; no network either.
+        verify(juheApi, never()).getTyphoonDetail(any(), any())
+        verify(qWeatherApi, never()).getStormTrack(any())
+    }
+
+    @Test
+    fun `without any key stale cached detail is not served as failure fallback`() = runTest {
+        val repo = repoWith(juheKey = "", qWeatherConfigured = false)
+        whenever(localDataSource.getById("202609")).thenReturn(fullCached("202609", "2026-07-10 14:00:00"))
+        whenever(localDataSource.getCachedAtMs("202609")).thenReturn(nowMs - 3 * 60 * 60_000)
+
+        assertTrue(repo.getTyphoonDetail("202609").exceptionOrNull() is NoDataSourceConfiguredError)
     }
 
     @Test

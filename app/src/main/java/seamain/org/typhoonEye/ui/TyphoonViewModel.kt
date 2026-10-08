@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.DistributionConfig
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.data.credentials.UserDataSourceKeys
+import seamain.org.typhoonEye.data.credentials.UserKeyStore
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
@@ -97,7 +99,8 @@ class TyphoonViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val liveNotifier: TyphoonLiveNotifier,
     private val alertNotifier: TyphoonAlertNotifier,
-    private val appUpdateRepository: AppUpdateRepository
+    private val appUpdateRepository: AppUpdateRepository,
+    private val userKeyStore: UserKeyStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TyphoonUiState>(TyphoonUiState.Loading)
@@ -111,6 +114,10 @@ class TyphoonViewModel @Inject constructor(
 
     private val _detailLoading = MutableStateFlow(false)
     val detailLoading: StateFlow<Boolean> = _detailLoading.asStateFlow()
+
+    /** Last detail load failure (typed), e.g. [NoDataSourceConfiguredError] for a deep link without keys. */
+    private val _detailError = MutableStateFlow<TyphoonDataError?>(null)
+    val detailError: StateFlow<TyphoonDataError?> = _detailError.asStateFlow()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -144,6 +151,10 @@ class TyphoonViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserSettings())
 
     val appUpdateState: StateFlow<AppUpdateState> = appUpdateRepository.state
+
+    /** Settings → "Custom data source keys" (on-device only; UI shows them masked). */
+    val dataSourceKeys: StateFlow<UserDataSourceKeys> = userKeyStore.keys
+        .stateIn(viewModelScope, SharingStarted.Eagerly, UserDataSourceKeys())
 
     /** Latest device fix (live) or DataStore cache — used for distance UI + map. */
     private val _liveUserLocation = MutableStateFlow<UserLocation?>(null)
@@ -360,7 +371,16 @@ class TyphoonViewModel @Inject constructor(
 
     /** Leave demo mode and try live data again (lands on NoDataSource without keys). */
     fun exitDemo() {
+        resetToLiveLoading()
+        // Normal TTL rules: leaving demo should not force an extra network fetch.
+        loadTyphoons(forceRefresh = false)
+    }
+
+    private fun resetToLiveLoading() {
         refreshJob?.cancel()
+        detailJob?.cancel()
+        _detailLoading.value = false
+        _detailError.value = null
         _dataMode.value = DataMode.Live
         _allTyphoons.value = emptyList()
         _selectedTyphoon.value = null
@@ -368,8 +388,33 @@ class TyphoonViewModel @Inject constructor(
         _query.value = ""
         _intensityFilter.value = null
         _uiState.value = TyphoonUiState.Loading
-        // Normal TTL rules: leaving demo should not force an extra network fetch.
-        loadTyphoons(forceRefresh = false)
+    }
+
+    /** Settings: store user keys on device, then reload with them right away. */
+    fun saveDataSourceKeys(keys: UserDataSourceKeys) {
+        viewModelScope.launch {
+            userKeyStore.save(keys.trimmed())
+            reloadAfterCredentialsChanged()
+        }
+    }
+
+    /** Settings: remove all user keys (build-time keys, if any, apply again). */
+    fun clearDataSourceKeys() {
+        viewModelScope.launch {
+            userKeyStore.clear()
+            reloadAfterCredentialsChanged()
+        }
+    }
+
+    /**
+     * Results fetched with the old key must not linger for up to the 10-min list TTL:
+     * forget the last fetch time (also bypasses the 60 s force throttle) and refetch now.
+     * With keys → live data; without → NoDataSource page with the demo entry.
+     */
+    private suspend fun reloadAfterCredentialsChanged() {
+        resetToLiveLoading()
+        repository.invalidateListFreshness()
+        loadTyphoons(forceRefresh = true)
     }
 
     /** Settings: push sample emergency alerts for preview. */
@@ -444,7 +489,13 @@ class TyphoonViewModel @Inject constructor(
             repository.getActiveTyphoons(forceRefresh = forceRefresh)
                 .onSuccess { feed -> applyFeed(feed) }
                 .onFailure { error ->
-                    if (!hadData) {
+                    if (error is NoDataSourceConfiguredError && _dataMode.value == DataMode.Live) {
+                        // Last key removed: show the no-data-source page even if a list was
+                        // on screen, and drop live typhoons so notifications stop.
+                        _allTyphoons.value = emptyList()
+                        _lastUpdatedAtMs.value = null
+                        _uiState.value = TyphoonUiState.NoDataSource
+                    } else if (!hadData) {
                         _uiState.value = error.toTyphoonUiState()
                     }
                 }
@@ -506,8 +557,16 @@ class TyphoonViewModel @Inject constructor(
         detailJob?.cancel()
         detailJob = viewModelScope.launch {
             _detailLoading.value = true
+            _detailError.value = null
             try {
                 repository.getTyphoonDetail(id)
+                    .onFailure { error ->
+                        _detailError.value = error as? TyphoonDataError
+                        if (error is NoDataSourceConfiguredError && _dataMode.value == DataMode.Live) {
+                            // Never keep showing a storm from an old key / list snapshot.
+                            _selectedTyphoon.value = null
+                        }
+                    }
                     .onSuccess { detail ->
                         // Always keep the id used by navigation / selection.
                         val stable = if (detail.id == id) detail else detail.copy(id = id)

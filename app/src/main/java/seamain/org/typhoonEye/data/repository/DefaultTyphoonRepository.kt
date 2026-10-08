@@ -4,8 +4,11 @@ import android.util.Log
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
+import seamain.org.typhoonEye.data.credentials.DataSourceCredentials
+import seamain.org.typhoonEye.data.credentials.hasAnyDataSource
+import seamain.org.typhoonEye.data.credentials.hasJuhe
+import seamain.org.typhoonEye.data.credentials.hasQWeather
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
@@ -24,7 +27,6 @@ import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
 import javax.inject.Inject
-import javax.inject.Named
 
 /**
  * Cache-first typhoon repository:
@@ -42,22 +44,23 @@ import javax.inject.Named
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
-    @Named("juhe_key") private val juheKey: String,
-    private val qWeatherAuth: QWeatherAuthInterceptor,
+    private val credentials: DataSourceCredentials,
     private val localDataSource: TyphoonLocalDataSource,
     private val syncStore: FeedSyncStore,
     private val clock: WallClock
 ) : TyphoonRepository {
 
+    // Credentials are evaluated on every call (Settings key → build key), never cached here,
+    // so entering or removing a key takes effect without recreating the repository.
     private val qWeatherConfigured: Boolean
-        get() = qWeatherAuth.hasCredentials
+        get() = credentials.hasQWeather
 
     private val juheConfigured: Boolean
-        get() = juheKey.isNotBlank()
+        get() = credentials.hasJuhe
 
-    /** True when at least one remote data source has credentials in this build. */
+    /** True when at least one remote data source currently has credentials. */
     val hasAnyDataSource: Boolean
-        get() = juheConfigured || qWeatherConfigured
+        get() = credentials.hasAnyDataSource
 
     private val tag = "TyphoonRepository"
 
@@ -70,6 +73,8 @@ class DefaultTyphoonRepository @Inject constructor(
     )
 
     override suspend fun getCachedFeed(): TyphoonFeed? {
+        // Without any key the UI shows the no-data-source page, not leftovers from an old key.
+        if (!hasAnyDataSource) return null
         val cached = runCatching { localDataSource.getAll() }.getOrNull().orEmpty()
         val fetchedAt = syncStore.lastListFetchAtMs
         if (cached.isEmpty() && fetchedAt == null) return null
@@ -82,6 +87,12 @@ class DefaultTyphoonRepository @Inject constructor(
 
     override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> =
         listMutex.withLock {
+            if (!hasAnyDataSource) {
+                // Checked before the TTL so removing the last key is reflected immediately.
+                // Room cache is kept (not wiped) but not served without a data source.
+                Log.i(tag, "No data source configured (no user or build-time key)")
+                return@withLock Result.failure(NoDataSourceConfiguredError())
+            }
             val now = clock.nowMs()
             val lastFetch = syncStore.lastListFetchAtMs
             val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
@@ -127,7 +138,16 @@ class DefaultTyphoonRepository @Inject constructor(
             Result.failure(error)
         }
 
+    override suspend fun invalidateListFreshness() {
+        listMutex.withLock { syncStore.lastListFetchAtMs = null }
+    }
+
     override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
+        if (!hasAnyDataSource) {
+            // Same rule as the list: no key → no data, not a cached detail from an old key
+            // (reachable from a posted notification / deep link).
+            return Result.failure(NoDataSourceConfiguredError())
+        }
         val now = clock.nowMs()
         val cached = runCatching { localDataSource.getById(id) }.getOrNull()
         if (cached != null && cached.hasFullDetail()) {
@@ -165,7 +185,6 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
         if (!hasAnyDataSource) {
-            Log.i(tag, "No data source configured in this build (no JUHE_KEY / QWeather credentials)")
             return Result.failure(NoDataSourceConfiguredError())
         }
 
@@ -192,7 +211,8 @@ class DefaultTyphoonRepository @Inject constructor(
         }
         val failures = ArrayList<SourceFailure>()
 
-        if (!id.startsWith("NP_") && juheConfigured) {
+        val juheKey = credentials.juheKey()
+        if (!id.startsWith("NP_") && juheKey.isNotBlank()) {
             try {
                 val response = juheApi.getTyphoonDetail(juheKey, id)
                 if (response.errorCode == 0 && response.result?.data != null) {
@@ -242,6 +262,7 @@ class DefaultTyphoonRepository @Inject constructor(
     }
 
     private suspend fun fetchFromJuhe(cachedById: Map<String, Typhoon>): FetchOutcome {
+        val juheKey = credentials.juheKey()
         return try {
             val listResponse = juheApi.getActiveTyphoons(juheKey)
             when (listResponse.errorCode) {

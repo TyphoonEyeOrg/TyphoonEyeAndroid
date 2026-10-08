@@ -7,8 +7,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import seamain.org.typhoonEye.R
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
+import seamain.org.typhoonEye.data.credentials.DataSourceCredentials
+import seamain.org.typhoonEye.data.credentials.hasQWeather
 import seamain.org.typhoonEye.data.model.isTyphoonRelated
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.domain.model.AlertSeverity
@@ -36,11 +37,12 @@ import kotlin.math.roundToInt
 class DefaultWarningRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val warningApi: QWeatherWarningApi,
-    private val qWeatherAuth: QWeatherAuthInterceptor
+    private val credentials: DataSourceCredentials
 ) : WarningRepository {
 
+    /** Per call: a QWeather key entered in Settings applies without restart. */
     private val qWeatherConfigured: Boolean
-        get() = qWeatherAuth.hasCredentials
+        get() = credentials.hasQWeather
 
     override suspend fun fetchTyphoonAlerts(
         activeTyphoons: List<Typhoon>,

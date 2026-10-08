@@ -15,16 +15,22 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -54,6 +62,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
 import seamain.org.typhoonEye.data.preferences.ThemeMode
+import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
@@ -149,8 +158,10 @@ fun TyphoonApp(
     val filtered by viewModel.filteredTyphoons.collectAsStateWithLifecycle()
     val selectedTyphoon by viewModel.selectedTyphoon.collectAsStateWithLifecycle()
     val detailLoading by viewModel.detailLoading.collectAsStateWithLifecycle()
+    val detailError by viewModel.detailError.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
+    val dataSourceKeys by viewModel.dataSourceKeys.collectAsStateWithLifecycle()
     val intensityFilter by viewModel.intensityFilter.collectAsStateWithLifecycle()
     val lastUpdatedAtMs by viewModel.lastUpdatedAtMs.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
@@ -436,7 +447,10 @@ fun TyphoonApp(
                     updateStatusDialogs = true
                     viewModel.checkForAppUpdate(force = true)
                 },
-                isCheckingUpdates = appUpdateState is AppUpdateState.Checking
+                isCheckingUpdates = appUpdateState is AppUpdateState.Checking,
+                dataSourceKeys = dataSourceKeys,
+                onSaveDataSourceKeys = viewModel::saveDataSourceKeys,
+                onClearDataSourceKeys = viewModel::clearDataSourceKeys
             )
         }
 
@@ -474,6 +488,23 @@ fun TyphoonApp(
             BackHandler(onBack = ::leaveDetail)
 
             when {
+                // No key (e.g. notification / deep link after removing it): explain and offer
+                // the key settings instead of a stale cached storm or a generic error.
+                detailError is NoDataSourceConfiguredError && dataMode == DataMode.Live && !detailLoading -> {
+                    DetailNoDataSourcePlaceholder(
+                        onBack = ::leaveDetail,
+                        onEnterKey = {
+                            navController.navigate(AppDestination.Settings) {
+                                popUpTo(AppDestination.Home)
+                                launchSingleTop = true
+                            }
+                        },
+                        onViewDemo = {
+                            viewModel.loadDemoData()
+                            leaveDetail()
+                        }
+                    )
+                }
                 typhoon != null -> {
                     DetailScreen(
                         typhoon = typhoon,
@@ -509,6 +540,54 @@ fun TyphoonApp(
                     DetailLoadingPlaceholder(loading = false, onBack = ::leaveDetail)
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailNoDataSourcePlaceholder(
+    onBack: () -> Unit,
+    onEnterKey: () -> Unit,
+    onViewDemo: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.no_data_source_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = stringResource(R.string.no_data_source_body),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onEnterKey) { Text(stringResource(R.string.action_enter_api_key)) }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onViewDemo) { Text(stringResource(R.string.action_view_demo)) }
         }
     }
 }

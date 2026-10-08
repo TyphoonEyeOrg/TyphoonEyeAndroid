@@ -260,7 +260,7 @@
 
     <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
     <string name="no_data_source_title">此版本未配置实时数据源</string>
-    <string name="no_data_source_body">此版本不含天气 API 密钥，因此无法加载实时台风数据。数据源为可选项，需要自行构建应用时配置。你仍可以使用明确标注的示例数据体验应用。</string>
+    <string name="no_data_source_body">此版本不含天气 API 密钥，暂时无法加载实时台风数据。你可以在设置中填写自己的和风天气或聚合数据 API 密钥，或使用明确标注的示例数据体验应用。</string>
     <string name="no_data_source_authority">如需真实台风预警，请以当地气象部门发布为准。</string>
     <string name="action_view_demo">查看演示数据</string>
     <string name="action_exit_demo">退出演示</string>
@@ -300,4 +300,22 @@
     <string name="demo_bavi_name">巴威</string>
     <string name="demo_mekkhala_name">美莎克</string>
     <string name="demo_hagupit_name">黑格比</string>
+
+    <!-- User-supplied data source keys (Settings) -->
+    <string name="section_data_source_keys">自定义数据源密钥</string>
+    <string name="data_source_keys_intro">可选：填写你自己的和风天气或聚合数据 API 密钥以加载实时台风数据。此处填写的密钥优先于应用内置的密钥。</string>
+    <string name="data_source_keys_privacy">密钥仅保存在本设备上，不会上传、不会写入日志，也不会包含在备份和设备迁移中。</string>
+    <string name="qweather_api_key_label">和风天气 API Key</string>
+    <string name="qweather_api_host_label">和风天气 API Host</string>
+    <string name="qweather_api_host_hint">和风天气控制台中你账号的 API Host，例如 abc1234xyz.re.qweatherapi.com</string>
+    <string name="qweather_api_host_invalid">主机名无效</string>
+    <string name="qweather_api_host_missing_hint">新注册的和风天气账号需要填写自己的 API Host（见和风天气控制台）。留空则使用旧的公共地址 devapi.qweather.com。</string>
+    <string name="juhe_key_label">聚合数据密钥</string>
+    <string name="action_save_keys">保存</string>
+    <string name="action_clear_keys">移除密钥</string>
+    <string name="data_source_keys_saved">密钥已保存，正在刷新</string>
+    <string name="data_source_keys_cleared">密钥已移除</string>
+    <string name="cd_show_key">显示密钥</string>
+    <string name="cd_hide_key">隐藏密钥</string>
+    <string name="action_enter_api_key">填写 API 密钥</string>
 </resources>

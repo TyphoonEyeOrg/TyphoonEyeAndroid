@@ -1,71 +1,78 @@
 package seamain.org.typhoonEye.data.api
 
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
+import seamain.org.typhoonEye.data.credentials.DataSourceCredentials
+import seamain.org.typhoonEye.data.credentials.QWeatherCredentials
 import seamain.org.typhoonEye.data.util.JwtUtils
 import java.io.IOException
 
 /**
- * QWeather auth — matches Postman / official docs:
- * 1) Preferred simple path: `X-QW-Api-Key: <apiKey>`
- * 2) JWT: `Authorization: Bearer <EdDSA token>`
+ * QWeather auth + host, resolved **per request** from [credentials] so a key / API host
+ * entered in Settings applies immediately (no restart, no rebuilt Retrofit):
+ * 1) Rewrites scheme/host/port of every request to the configured API host
+ *    (new QWeather accounts use a per-account host; Retrofit's base URL is a placeholder).
+ * 2) `X-QW-Api-Key: <apiKey>` (user key or build key).
+ * 3) Build-time only: `Authorization: Bearer <EdDSA JWT>` when no API key exists.
  *
  * Never crashes the OkHttp dispatcher on missing credentials — throws [IOException].
+ * Never logs credentials.
  */
 class QWeatherAuthInterceptor(
-    private val apiKey: String = "",
-    private val kid: String = "",
-    private val projectId: String = "",
-    private val privateKeyPem: String = ""
+    private val credentials: () -> QWeatherCredentials
 ) : Interceptor {
 
-    @Volatile
-    private var cachedToken: String? = null
+    constructor(provider: DataSourceCredentials) : this(provider::qWeather)
+
+    private class CachedJwt(val identity: String, val token: String, val expiresAtMs: Long)
 
     @Volatile
-    private var tokenExpiresAtMs: Long = 0L
-
-    val hasCredentials: Boolean
-        get() = apiKey.isNotBlank() || (kid.isNotBlank() && projectId.isNotBlank() && privateKeyPem.isNotBlank())
+    private var cachedJwt: CachedJwt? = null
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        if (!hasCredentials) {
+        val creds = credentials()
+        if (!creds.isConfigured) {
             throw IOException(
-                "QWeather credentials not configured. Set QWEATHER_API_KEY, or " +
-                    "QWEATHER_KID + QWEATHER_PROJECT_ID + QWEATHER_PRIVATE_KEY (see local.properties.example)"
+                "QWeather credentials not configured (enter a key in Settings, or set " +
+                    "QWEATHER_API_KEY at build time; see local.properties.example)"
             )
         }
-
-        val builder = chain.request().newBuilder()
-        if (apiKey.isNotBlank()) {
-            // Official API KEY header (also used in Postman as X-QW-Api-Key)
-            builder.header("X-QW-Api-Key", apiKey)
+        val target = creds.host.toHttpUrl()
+        val original = chain.request()
+        val url = original.url.newBuilder()
+            .scheme(target.scheme)
+            .host(target.host)
+            .port(target.port)
+            .build()
+        val builder = original.newBuilder().url(url)
+        if (creds.usesApiKey) {
+            builder.header(API_KEY_HEADER, creds.apiKey)
         } else {
-            builder.header("Authorization", "Bearer ${currentJwt()}")
+            builder.header("Authorization", "Bearer ${currentJwt(creds)}")
         }
         return chain.proceed(builder.build())
     }
 
-    private fun currentJwt(): String {
+    private fun currentJwt(creds: QWeatherCredentials): String {
         val now = System.currentTimeMillis()
-        val existing = cachedToken
-        if (existing != null && now < tokenExpiresAtMs - 60_000) {
-            return existing
-        }
+        val identity = "${creds.kid}/${creds.projectId}"
+        cachedJwt?.let { if (it.identity == identity && now < it.expiresAtMs - 60_000) return it.token }
         return try {
             val jwt = JwtUtils.generateQWeatherJwt(
-                kid = kid,
-                projectId = projectId,
-                privateKeyPem = privateKeyPem
+                kid = creds.kid,
+                projectId = creds.projectId,
+                privateKeyPem = creds.privateKeyPem
             )
-            cachedToken = jwt
             // Match JwtUtils default TTL (900s), refresh early
-            tokenExpiresAtMs = now + 900_000
+            cachedJwt = CachedJwt(identity, jwt, now + 900_000)
             jwt
-        } catch (e: IllegalArgumentException) {
-            throw IOException("QWeather JWT generation failed: ${e.message}", e)
         } catch (e: Exception) {
-            throw IOException("QWeather JWT generation failed: ${e.message}", e)
+            throw IOException("QWeather JWT generation failed: ${e.javaClass.simpleName}", e)
         }
+    }
+
+    companion object {
+        const val API_KEY_HEADER = "X-QW-Api-Key"
     }
 }

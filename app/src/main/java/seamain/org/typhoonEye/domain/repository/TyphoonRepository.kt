@@ -18,4 +18,11 @@ interface TyphoonRepository {
     suspend fun getCachedFeed(): TyphoonFeed?
 
     suspend fun getTyphoonDetail(id: String): Result<Typhoon>
+
+    /**
+     * Forget when the list was last fetched, so the next [getActiveTyphoons] goes to the
+     * network regardless of the list TTL and the force-refresh throttle.
+     * Called when data-source keys change.
+     */
+    suspend fun invalidateListFreshness()
 }

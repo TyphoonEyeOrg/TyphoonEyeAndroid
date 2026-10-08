@@ -16,6 +16,9 @@ import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
+import seamain.org.typhoonEye.data.api.redactingLoggingInterceptor
+import seamain.org.typhoonEye.data.credentials.DataSourceCredentials
+import seamain.org.typhoonEye.data.credentials.QWeatherHost
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -33,32 +36,24 @@ object NetworkModule {
         encodeDefaults = true
     }
 
+    /** Key + API host are read per request from [DataSourceCredentials] (Settings → BuildConfig). */
     @Provides
     @Singleton
-    fun provideQWeatherAuthInterceptor(): QWeatherAuthInterceptor =
-        QWeatherAuthInterceptor(
-            apiKey = BuildConfig.QWEATHER_API_KEY,
-            kid = BuildConfig.QWEATHER_KID,
-            projectId = BuildConfig.QWEATHER_PROJECT_ID,
-            privateKeyPem = BuildConfig.QWEATHER_PRIVATE_KEY
-        )
+    fun provideQWeatherAuthInterceptor(credentials: DataSourceCredentials): QWeatherAuthInterceptor =
+        QWeatherAuthInterceptor(credentials)
 
-    @Provides
-    @Singleton
-    @Named("juhe_key")
-    fun provideJuheKey(): String = BuildConfig.JUHE_KEY
-
+    /** Debug logs full URLs (BASIC): keys in query params / auth headers are masked. */
     @Provides
     @Singleton
     @Named("logging")
     fun provideLoggingInterceptor(): HttpLoggingInterceptor =
-        HttpLoggingInterceptor().apply {
+        redactingLoggingInterceptor(
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
-        }
+        )
 
     @Provides
     @Singleton
@@ -134,11 +129,9 @@ object NetworkModule {
         json: Json
     ): Retrofit {
         val mediaType = "application/json".toMediaType()
-        val host = BuildConfig.QWEATHER_HOST.ifBlank {
-            "https://devapi.qweather.com/"
-        }.let { if (it.endsWith("/")) it else "$it/" }
+        // Placeholder only: QWeatherAuthInterceptor rewrites the host per request.
         return Retrofit.Builder()
-            .baseUrl(host)
+            .baseUrl("${QWeatherHost.DEFAULT}/")
             .client(client)
             .addConverterFactory(json.asConverterFactory(mediaType))
             .build()

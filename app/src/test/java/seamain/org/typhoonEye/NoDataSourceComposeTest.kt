@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -35,7 +36,8 @@ class NoDataSourceComposeTest {
         typhoons: List<Typhoon> = emptyList(),
         onLoadDemo: () -> Unit = {},
         onExitDemo: () -> Unit = {},
-        onRefresh: () -> Unit = {}
+        onRefresh: () -> Unit = {},
+        onOpenSettings: () -> Unit = {}
     ) {
         composeRule.setContent {
             Box(modifier = Modifier.size(412.dp, 915.dp)) {
@@ -53,7 +55,7 @@ class NoDataSourceComposeTest {
                         onRefresh = onRefresh,
                         onLoadDemo = onLoadDemo,
                         onExitDemo = onExitDemo,
-                        onOpenSettings = {},
+                        onOpenSettings = onOpenSettings,
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
@@ -63,18 +65,23 @@ class NoDataSourceComposeTest {
     }
 
     @Test
-    fun noDataSource_explainsAndOffersDemo() {
+    fun noDataSource_explainsAndOffersKeyEntryAndDemo() {
         var demoClicks = 0
         var retries = 0
+        var settingsClicks = 0
         setHome(
             TyphoonUiState.NoDataSource,
             onLoadDemo = { demoClicks++ },
-            onRefresh = { retries++ }
+            onRefresh = { retries++ },
+            onOpenSettings = { settingsClicks++ }
         )
 
         composeRule.onNodeWithText("No live data source in this build").assertIsDisplayed()
-        composeRule.onNodeWithText("View demo data").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Retry").performClick()
+        // Small Robolectric window: the page scrolls, so bring each action into view first.
+        composeRule.onNodeWithText("Enter your API key").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("View demo data").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Retry").performScrollTo().performClick()
+        assertEquals(1, settingsClicks)
         assertEquals(1, demoClicks)
         assertEquals(1, retries)
         // Not presented as a load failure.

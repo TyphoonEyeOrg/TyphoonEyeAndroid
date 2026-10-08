@@ -260,7 +260,7 @@
 
     <!-- No data source / demo mode / typed errors (F-Droid review !45561) -->
     <string name="no_data_source_title">No live data source in this build</string>
-    <string name="no_data_source_body">This build ships without weather API keys, so it can’t load live typhoon data. Data sources are optional and must be added when building the app yourself. You can still explore the app with clearly labeled sample data.</string>
+    <string name="no_data_source_body">This build ships without weather API keys, so it can’t load live typhoon data yet. Enter your own QWeather or Juhe API key in Settings, or explore the app with clearly labeled sample data.</string>
     <string name="no_data_source_authority">For real typhoon warnings, follow your local meteorological authority.</string>
     <string name="action_view_demo">View demo data</string>
     <string name="action_exit_demo">Exit demo</string>
@@ -300,4 +300,22 @@
     <string name="demo_bavi_name">Bavi</string>
     <string name="demo_mekkhala_name">Mekkhala</string>
     <string name="demo_hagupit_name">Hagupit</string>
+
+    <!-- User-supplied data source keys (Settings) -->
+    <string name="section_data_source_keys">Custom data source keys</string>
+    <string name="data_source_keys_intro">Optional: use your own QWeather or Juhe API key to load live typhoon data. A key entered here takes priority over any key built into the app.</string>
+    <string name="data_source_keys_privacy">Keys are stored only on this device. They are never uploaded, never logged and excluded from backups and device transfer.</string>
+    <string name="qweather_api_key_label">QWeather API Key</string>
+    <string name="qweather_api_host_label">QWeather API Host</string>
+    <string name="qweather_api_host_hint">Your account’s API Host from the QWeather console, e.g. abc1234xyz.re.qweatherapi.com</string>
+    <string name="qweather_api_host_invalid">Not a valid host name</string>
+    <string name="qweather_api_host_missing_hint">New QWeather accounts need their own API Host (see the QWeather console). If left blank, the legacy host devapi.qweather.com is used.</string>
+    <string name="juhe_key_label">Juhe key</string>
+    <string name="action_save_keys">Save</string>
+    <string name="action_clear_keys">Remove keys</string>
+    <string name="data_source_keys_saved">Keys saved — refreshing</string>
+    <string name="data_source_keys_cleared">Keys removed</string>
+    <string name="cd_show_key">Show key</string>
+    <string name="cd_hide_key">Hide key</string>
+    <string name="action_enter_api_key">Enter your API key</string>
 </resources>
