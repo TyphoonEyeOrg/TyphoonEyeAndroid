@@ -14,13 +14,14 @@
 # Default host is the public API. Use your dedicated host if you have one.
 # QWEATHER_HOST=https://devapi.qweather.com/
 #
-# Recommended: API Key → X-QW-Api-Key
-# QWEATHER_API_KEY=
-#
-# Or EdDSA JWT (kid + projectId + PEM private key)
-# QWEATHER_KID=
-# QWEATHER_PROJECT_ID=
+# Recommended: EdDSA JWT. Used only when all four are set; then the API key is ignored.
+# QWEATHER_KID=            credential ID (JWT header kid)
+# QWEATHER_PROJECT_ID=     project ID (JWT sub)
+# QWEATHER_DEVELOPER_ID=   developer ID, console → account (JWT iss)
 # QWEATHER_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+#
+# Or API Key → X-QW-Api-Key (daily requests limited by QWeather from 2027-01-01)
+# QWEATHER_API_KEY=
 
 # ---------- Map (optional) ----------
 # Mainland China basemap (Amap Web key): https://console.amap.com/dev/key/app

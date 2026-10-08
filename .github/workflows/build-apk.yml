@@ -68,6 +68,9 @@ jobs:
           if [ -n "${{ secrets.QWEATHER_PROJECT_ID }}" ]; then
             echo "QWEATHER_PROJECT_ID=${{ secrets.QWEATHER_PROJECT_ID }}" >> local.properties
           fi
+          if [ -n "${{ secrets.QWEATHER_DEVELOPER_ID }}" ]; then
+            echo "QWEATHER_DEVELOPER_ID=${{ secrets.QWEATHER_DEVELOPER_ID }}" >> local.properties
+          fi
           if [ -n "${{ secrets.QWEATHER_PRIVATE_KEY }}" ]; then
             echo "QWEATHER_PRIVATE_KEY=${{ secrets.QWEATHER_PRIVATE_KEY }}" >> local.properties
           fi

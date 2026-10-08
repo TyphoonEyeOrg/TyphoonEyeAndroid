@@ -6,66 +6,80 @@ import seamain.org.typhoonEye.data.util.JwtUtils
 import java.io.IOException
 
 /**
- * QWeather auth — matches Postman / official docs:
- * 1) Preferred simple path: `X-QW-Api-Key: <apiKey>`
- * 2) JWT: `Authorization: Bearer <EdDSA token>`
+ * QWeather auth, as documented at https://dev.qweather.com/docs/configuration/authentication/:
+ * 1) JWT `Authorization: Bearer <EdDSA token>` when KID, PROJECT_ID, DEVELOPER_ID and
+ *    PRIVATE_KEY are all set (QWeather's recommended method; API KEY daily requests are
+ *    limited from 2027-01-01);
+ * 2) otherwise `X-QW-Api-Key: <apiKey>`.
+ * Never both on one request: QWeather may reject mixed auth.
  *
  * Never crashes the OkHttp dispatcher on missing credentials — throws [IOException].
  */
 class QWeatherAuthInterceptor(
-    private val apiKey: String = "",
-    private val kid: String = "",
-    private val projectId: String = "",
-    private val privateKeyPem: String = ""
+    apiKey: String = "",
+    kid: String = "",
+    projectId: String = "",
+    developerId: String = "",
+    privateKeyPem: String = "",
+    private val clock: () -> Long = System::currentTimeMillis
 ) : Interceptor {
 
-    @Volatile
-    private var cachedToken: String? = null
+    private val apiKey = apiKey.trim()
+    private val kid = kid.trim()
+    private val projectId = projectId.trim()
+    private val developerId = developerId.trim()
+    private val privateKeyPem = privateKeyPem.trim()
+
+    private data class CachedJwt(val token: String, val expiresAtMs: Long, val fingerprint: String)
 
     @Volatile
-    private var tokenExpiresAtMs: Long = 0L
+    private var cached: CachedJwt? = null
+
+    /** All four JWT parts are present; a partial set falls back to the API key. */
+    val jwtConfigured: Boolean
+        get() = kid.isNotEmpty() && projectId.isNotEmpty() && developerId.isNotEmpty() && privateKeyPem.isNotEmpty()
 
     val hasCredentials: Boolean
-        get() = apiKey.isNotBlank() || (kid.isNotBlank() && projectId.isNotBlank() && privateKeyPem.isNotBlank())
+        get() = jwtConfigured || apiKey.isNotEmpty()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         if (!hasCredentials) {
             throw IOException(
-                "和风天气凭证未配置。请在 local.properties 设置 QWEATHER_API_KEY，" +
-                    "或配置 QWEATHER_KID + QWEATHER_PROJECT_ID + QWEATHER_PRIVATE_KEY（见 local.properties.example）"
+                "和风天气凭证未配置。请在 local.properties 配置 QWEATHER_KID + QWEATHER_PROJECT_ID + " +
+                    "QWEATHER_DEVELOPER_ID + QWEATHER_PRIVATE_KEY，或设置 QWEATHER_API_KEY（见 local.properties.example）"
             )
         }
 
         val builder = chain.request().newBuilder()
-        if (apiKey.isNotBlank()) {
-            // Official API KEY header (also used in Postman as X-QW-Api-Key)
-            builder.header("X-QW-Api-Key", apiKey)
-        } else {
+            .removeHeader("Authorization")
+            .removeHeader("X-QW-Api-Key")
+        if (jwtConfigured) {
             builder.header("Authorization", "Bearer ${currentJwt()}")
+        } else {
+            builder.header("X-QW-Api-Key", apiKey)
         }
         return chain.proceed(builder.build())
     }
 
-    private fun currentJwt(): String {
-        val now = System.currentTimeMillis()
-        val existing = cachedToken
-        if (existing != null && now < tokenExpiresAtMs - 60_000) {
-            return existing
-        }
+    /** Cached until a minute before expiry; the cache is keyed on kid, sub, iss and the key. */
+    internal fun currentJwt(): String {
+        val now = clock()
+        val fingerprint = "$kid|$projectId|$developerId|${privateKeyPem.hashCode()}"
+        cached?.let { if (it.fingerprint == fingerprint && now < it.expiresAtMs - 60_000) return it.token }
         return try {
             val jwt = JwtUtils.generateQWeatherJwt(
                 kid = kid,
                 projectId = projectId,
-                privateKeyPem = privateKeyPem
+                developerId = developerId,
+                privateKeyPem = privateKeyPem,
+                nowMs = now
             )
-            cachedToken = jwt
-            // Match JwtUtils default TTL (900s), refresh early
-            tokenExpiresAtMs = now + 900_000
+            // iat is now - 30 s, so the token expires TTL - 30 s from now.
+            cached = CachedJwt(jwt, now + (JwtUtils.DEFAULT_TTL_SECONDS - 30) * 1000, fingerprint)
             jwt
-        } catch (e: IllegalArgumentException) {
-            throw IOException("和风 JWT 生成失败: ${e.message}", e)
         } catch (e: Exception) {
-            throw IOException("和风 JWT 生成失败: ${e.message}", e)
+            // Message only: never echo key material.
+            throw IOException("和风 JWT 生成失败: ${e.javaClass.simpleName}", e)
         }
     }
 }
