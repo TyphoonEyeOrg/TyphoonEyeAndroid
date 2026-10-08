@@ -34,7 +34,7 @@ When API keys are present (built into a private build or supplied at compile tim
 
 - Juhe typhoon APIs (if `JUHE_KEY` is set)  
 - QWeather tropical cyclone / warning APIs (if QWeather credentials are set)  
-- Map tile providers (e.g. Amap, OpenStreetMap/Carto-style sources) depending on basemap settings  
+- Map tiles are requested directly from the basemap provider: OpenFreeMap (OpenStreetMap data) by default, or Amap for mainland China if selected. If the map style can't load, the app falls back to MapLibre's demo tiles (demotiles.maplibre.org).  
 
 Those providers process requests under **their own** privacy policies and terms. Public demo builds may ship **without** keys and rely on demo or cached data.
 
@@ -96,7 +96,7 @@ https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid/issues
 **台风眼**是开源应用，不含广告与统计 SDK，也没有用于收集个人档案的台风眼自有账号服务器。
 
 - **定位（可选）：** 仅在开启相关预警并授权后，于设备本地估算与台风距离；可缓存最近位置标签。不会上传到台风眼自有服务器。本 GitHub 版在设备支持时使用 Google Play 定位服务。  
-- **气象数据：** 若构建时配置了密钥，请求会发往聚合、和风等第三方，以及所选地图瓦片服务，适用对方隐私条款。无密钥时以演示/缓存为主。  
+- **气象数据：** 若构建时配置了密钥，请求会发往聚合、和风等第三方，以及所选地图瓦片服务（默认 OpenFreeMap，使用 OpenStreetMap 数据；中国大陆可选高德；样式加载失败时退到 MapLibre 演示瓦片），适用对方隐私条款。无密钥时以演示/缓存为主。  
 - **更新：** 本 GitHub 版可能检查 GitHub Releases。  
 - **设置与通知：** 保存在本机；通知内容由本机根据已获取的风暴数据生成。  
 
