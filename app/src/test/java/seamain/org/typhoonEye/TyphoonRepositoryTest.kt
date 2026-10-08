@@ -15,7 +15,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
+import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
@@ -54,12 +54,8 @@ class TyphoonRepositoryTest {
 
     private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
 
-    private fun auth(configured: Boolean = true): QWeatherAuthInterceptor =
-        if (configured) {
-            QWeatherAuthInterceptor(apiKey = "test-key")
-        } else {
-            QWeatherAuthInterceptor()
-        }
+    private fun direct(juheKey: String, qWeatherConfigured: Boolean) =
+        DataSourceConfig(juheKey = juheKey, qWeatherDirectConfigured = qWeatherConfigured)
 
     @Before
     fun setup() {
@@ -72,8 +68,7 @@ class TyphoonRepositoryTest {
         repository = DefaultTyphoonRepository(
             juheApi = juheApi,
             qWeatherApi = qWeatherApi,
-            juheKey = juheKey,
-            qWeatherAuth = auth(configured = true),
+            config = direct(juheKey, qWeatherConfigured = true),
             localDataSource = localDataSource,
             syncStore = syncStore,
             clock = clock
@@ -224,8 +219,7 @@ class TyphoonRepositoryTest {
     private fun repoWith(juheKey: String, qWeatherConfigured: Boolean) = DefaultTyphoonRepository(
         juheApi = juheApi,
         qWeatherApi = qWeatherApi,
-        juheKey = juheKey,
-        qWeatherAuth = auth(configured = qWeatherConfigured),
+        config = direct(juheKey, qWeatherConfigured),
         localDataSource = localDataSource,
         syncStore = syncStore,
         clock = clock
@@ -233,7 +227,7 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `getActiveTyphoons without any key returns typed NoDataSourceConfiguredError`() = runTest {
-        // F-Droid build: no JUHE_KEY, no QWeather credentials.
+        // Direct-mode build made without keys: no JUHE_KEY, no QWeather credentials.
         val emptyRepo = repoWith(juheKey = "", qWeatherConfigured = false)
         whenever(localDataSource.getAll()).thenReturn(emptyList())
 

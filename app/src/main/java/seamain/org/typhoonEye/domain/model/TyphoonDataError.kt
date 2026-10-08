@@ -10,9 +10,10 @@ package seamain.org.typhoonEye.domain.model
 sealed class TyphoonDataError(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
- * This build has no weather data source configured: `JUHE_KEY` is blank and no
- * QWeather credentials were compiled in. Expected for the F-Droid build, which
- * ships without API keys. Not a network failure, so retrying alone won't help.
+ * This build has no weather data source configured: no relay URL, `JUHE_KEY` is blank and
+ * no QWeather credentials were compiled in (e.g. a GitHub-flavor build made without
+ * `local.properties` keys). Never happens in the F-Droid build, which uses TyphoonEye's
+ * relay. Not a network failure, so retrying alone won't help.
  */
 class NoDataSourceConfiguredError : TyphoonDataError(
     "No typhoon data source configured (JUHE_KEY and QWeather credentials are empty)"

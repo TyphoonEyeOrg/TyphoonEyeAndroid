@@ -125,24 +125,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Inject API keys from local.properties or System environment
-        buildConfigField("String", "JUHE_KEY", prop("JUHE_KEY", "JUHE_API_KEY", "JUHEKEY"))
-        buildConfigField("String", "QWEATHER_API_KEY", prop("QWEATHER_API_KEY"))
-        buildConfigField("String", "QWEATHER_KID", prop("QWEATHER_KID", "QWEATHER_PUBLIC_ID"))
-        buildConfigField("String", "QWEATHER_PROJECT_ID", prop("QWEATHER_PROJECT_ID"))
-        buildConfigField(
-            "String",
-            "QWEATHER_PRIVATE_KEY",
-            prop("QWEATHER_PRIVATE_KEY", "QWEATHER_PROJECT_KEY")
-        )
-        // Public QWeather API host by default. Dedicated console hosts override via local.properties.
-        buildConfigField(
-            "String",
-            "QWEATHER_HOST",
-            (localProperties.getProperty("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
-                ?: System.getenv("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
-                ?: "https://devapi.qweather.com/").asBuildConfigLiteral()
-        )
         // Empty = bundled asset://map_style.json (Carto raster). Override if needed.
         buildConfigField(
             "String",
@@ -192,9 +174,39 @@ android {
         create("github") {
             dimension = "distribution"
             isDefault = true
+            // Direct calls to Juhe / QWeather with build-time keys from local.properties or
+            // the environment (CI secrets). Unchanged from earlier releases.
+            buildConfigField("String", "JUHE_KEY", prop("JUHE_KEY", "JUHE_API_KEY", "JUHEKEY"))
+            buildConfigField("String", "QWEATHER_API_KEY", prop("QWEATHER_API_KEY"))
+            buildConfigField("String", "QWEATHER_KID", prop("QWEATHER_KID", "QWEATHER_PUBLIC_ID"))
+            buildConfigField("String", "QWEATHER_PROJECT_ID", prop("QWEATHER_PROJECT_ID"))
+            buildConfigField(
+                "String",
+                "QWEATHER_PRIVATE_KEY",
+                prop("QWEATHER_PRIVATE_KEY", "QWEATHER_PROJECT_KEY")
+            )
+            // Public QWeather API host by default. Dedicated console hosts override via local.properties.
+            buildConfigField(
+                "String",
+                "QWEATHER_HOST",
+                (localProperties.getProperty("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
+                    ?: System.getenv("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
+                    ?: "https://devapi.qweather.com/").asBuildConfigLiteral()
+            )
+            buildConfigField("String", "RELAY_BASE_URL", "\"\"")
         }
         create("fdroid") {
             dimension = "distribution"
+            // No weather API keys in this build, whatever local.properties / the environment
+            // contain: typhoon data comes from TyphoonEye's relay, which holds the keys
+            // server-side (see relay/). Also keeps F-Droid's rebuild identical to ours.
+            buildConfigField("String", "JUHE_KEY", "\"\"")
+            buildConfigField("String", "QWEATHER_API_KEY", "\"\"")
+            buildConfigField("String", "QWEATHER_KID", "\"\"")
+            buildConfigField("String", "QWEATHER_PROJECT_ID", "\"\"")
+            buildConfigField("String", "QWEATHER_PRIVATE_KEY", "\"\"")
+            buildConfigField("String", "QWEATHER_HOST", "\"\"")
+            buildConfigField("String", "RELAY_BASE_URL", "\"https://te-relay.seamain.org/\"")
         }
     }
 
@@ -357,6 +369,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.turbine)
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.compose.material3)

@@ -39,7 +39,7 @@ class QWeatherAuthInterceptor(
         val builder = chain.request().newBuilder()
         if (apiKey.isNotBlank()) {
             // Official API KEY header (also used in Postman as X-QW-Api-Key)
-            builder.header("X-QW-Api-Key", apiKey)
+            builder.header(API_KEY_HEADER, apiKey)
         } else {
             builder.header("Authorization", "Bearer ${currentJwt()}")
         }
@@ -67,5 +67,9 @@ class QWeatherAuthInterceptor(
         } catch (e: Exception) {
             throw IOException("QWeather JWT generation failed: ${e.message}", e)
         }
+    }
+
+    companion object {
+        const val API_KEY_HEADER = "X-QW-Api-Key"
     }
 }

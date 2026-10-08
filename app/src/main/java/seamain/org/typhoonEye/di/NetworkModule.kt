@@ -11,11 +11,14 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import seamain.org.typhoonEye.BuildConfig
+import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.GitHubReleaseApi
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
+import seamain.org.typhoonEye.data.api.RelayAlertsApi
+import seamain.org.typhoonEye.data.api.redactingLoggingInterceptor
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -43,22 +46,31 @@ object NetworkModule {
             privateKeyPem = BuildConfig.QWEATHER_PRIVATE_KEY
         )
 
+    /**
+     * GitHub build: direct calls with build-time keys. F-Droid build: everything through
+     * TyphoonEye's relay ([BuildConfig.RELAY_BASE_URL]); its BuildConfig keys are always blank.
+     */
     @Provides
     @Singleton
-    @Named("juhe_key")
-    fun provideJuheKey(): String = BuildConfig.JUHE_KEY
+    fun provideDataSourceConfig(auth: QWeatherAuthInterceptor): DataSourceConfig =
+        DataSourceConfig(
+            relayBaseUrl = BuildConfig.RELAY_BASE_URL,
+            juheKey = BuildConfig.JUHE_KEY,
+            qWeatherDirectConfigured = auth.hasCredentials
+        )
 
+    /** Debug logs full URLs (BASIC): keys in query params / auth headers are masked. */
     @Provides
     @Singleton
     @Named("logging")
     fun provideLoggingInterceptor(): HttpLoggingInterceptor =
-        HttpLoggingInterceptor().apply {
+        redactingLoggingInterceptor(
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
-        }
+        )
 
     @Provides
     @Singleton
@@ -98,9 +110,13 @@ object NetworkModule {
     @Named("qweather")
     fun provideQWeatherOkHttp(
         auth: QWeatherAuthInterceptor,
+        config: DataSourceConfig,
         @Named("logging") logging: HttpLoggingInterceptor
     ): OkHttpClient = baseOkHttpBuilder()
-        .addInterceptor(auth)
+        .apply {
+            // The relay authenticates upstream; the F-Droid build sends no auth header.
+            if (!config.viaRelay) addInterceptor(auth)
+        }
         .addInterceptor(logging)
         .build()
 
@@ -116,11 +132,12 @@ object NetworkModule {
     @Named("juhe")
     fun provideJuheRetrofit(
         @Named("juhe") client: OkHttpClient,
+        config: DataSourceConfig,
         json: Json
     ): Retrofit {
         val mediaType = "application/json".toMediaType()
         return Retrofit.Builder()
-            .baseUrl("https://apis.juhe.cn/")
+            .baseUrl(config.juheBaseUrl)
             .client(client)
             .addConverterFactory(json.asConverterFactory(mediaType))
             .build()
@@ -131,12 +148,14 @@ object NetworkModule {
     @Named("qweather")
     fun provideQWeatherRetrofit(
         @Named("qweather") client: OkHttpClient,
+        config: DataSourceConfig,
         json: Json
     ): Retrofit {
         val mediaType = "application/json".toMediaType()
-        val host = BuildConfig.QWEATHER_HOST.ifBlank {
-            "https://devapi.qweather.com/"
-        }.let { if (it.endsWith("/")) it else "$it/" }
+        val host = config.qWeatherRelayBaseUrl
+            ?: BuildConfig.QWEATHER_HOST.ifBlank {
+                "https://devapi.qweather.com/"
+            }.let { if (it.endsWith("/")) it else "$it/" }
         return Retrofit.Builder()
             .baseUrl(host)
             .client(client)
@@ -158,6 +177,23 @@ object NetworkModule {
     @Singleton
     fun provideQWeatherWarningApi(@Named("qweather") retrofit: Retrofit): QWeatherWarningApi =
         retrofit.create(QWeatherWarningApi::class.java)
+
+    /** Only called in relay mode (F-Droid build); the GitHub build never uses it. */
+    @Provides
+    @Singleton
+    fun provideRelayAlertsApi(
+        @Named("juhe") client: OkHttpClient,
+        config: DataSourceConfig,
+        json: Json
+    ): RelayAlertsApi {
+        val mediaType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl(config.relayBaseUrl.ifBlank { DataSourceConfig.UNUSED_RELAY_PLACEHOLDER })
+            .client(client)
+            .addConverterFactory(json.asConverterFactory(mediaType))
+            .build()
+            .create(RelayAlertsApi::class.java)
+    }
 
     @Provides
     @Singleton

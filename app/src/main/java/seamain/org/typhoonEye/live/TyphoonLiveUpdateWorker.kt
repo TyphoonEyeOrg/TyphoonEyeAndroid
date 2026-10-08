@@ -85,8 +85,8 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             result.onFailure { err ->
                 Log.w(TAG, "Background refresh failed: ${err.message}")
             }
-            // A build without any API key (F-Droid) can never succeed remotely: don't back off
-            // and retry for it, just wait for the next period.
+            // A direct-mode build without any API key can never succeed remotely: don't back
+            // off and retry for it, just wait for the next period.
             val failure = result.exceptionOrNull() ?: result.getOrNull()?.staleReason
             val remoteFailed = failure != null && failure !is NoDataSourceConfiguredError
             retryOrSucceed(remoteFailed)

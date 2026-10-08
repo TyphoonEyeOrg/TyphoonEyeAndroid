@@ -6,8 +6,10 @@ import seamain.org.typhoonEye.domain.model.UserLocation
 
 interface WarningRepository {
     /**
-     * @param userLocation when non-null, official alerts are queried primarily at this point
-     * (device GPS). Falls back to coastal watchpoints if null.
+     * @param userLocation GitHub build: when non-null, official alerts are queried primarily at
+     * this point (device GPS); falls back to coastal watchpoints if null.
+     * F-Droid build: never sent anywhere; only used on the device to pick nearby alerts from
+     * the relay's shared list.
      */
     suspend fun fetchTyphoonAlerts(
         activeTyphoons: List<Typhoon>,

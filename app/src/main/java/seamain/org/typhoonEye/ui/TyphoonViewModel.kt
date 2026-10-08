@@ -62,7 +62,7 @@ sealed class TyphoonUiState {
     ) : TyphoonUiState()
 
     /**
-     * This build has no weather API key (e.g. the F-Droid build). Not an error:
+     * This build has no data source (no relay, no weather API key). Not an error:
      * the UI explains it and offers clearly labeled demo data instead.
      */
     data object NoDataSource : TyphoonUiState()
@@ -327,7 +327,8 @@ class TyphoonViewModel @Inject constructor(
 
     /**
      * Load bundled, clearly labeled sample typhoons so the UI can be explored
-     * without any API key (F-Droid build) or offline. Only ever user-initiated.
+     * without any data source (a build without keys or relay), or when live data
+     * failed to load and nothing is cached. Only ever user-initiated.
      *
      * Release builds post no system notifications for demo data (no sample
      * alerts, no Live notification); use Settings → "Send test alert" to

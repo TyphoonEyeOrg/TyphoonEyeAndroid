@@ -7,8 +7,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import seamain.org.typhoonEye.R
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
+import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
+import seamain.org.typhoonEye.data.api.RelayAlertsApi
+import seamain.org.typhoonEye.data.model.RelayAlertsResponse
 import seamain.org.typhoonEye.data.model.isTyphoonRelated
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.domain.model.AlertSeverity
@@ -17,7 +19,9 @@ import seamain.org.typhoonEye.domain.model.EmergencyAlert
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.repository.WarningRepository
+import seamain.org.typhoonEye.domain.util.WallClock
 import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.haversineKm
 import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.currentIntensity
@@ -30,27 +34,29 @@ import kotlin.math.roundToInt
 /**
  * Official typhoon alerts (QWeather) + intensity-based urgency tips.
  *
- * When [UserLocation] is available, official lookups prioritize the device position
- * so notifications match where the user actually is.
+ * - GitHub build (direct): when [UserLocation] is available, official lookups prioritize the
+ *   device position so notifications match where the user actually is.
+ * - F-Droid build (relay): the location never leaves the device. The relay serves one shared
+ *   list of typhoon alerts for fixed coastal points ([RelayAlertsApi]); nearby points are
+ *   picked here ([nearbyRelayAlerts]).
  */
 class DefaultWarningRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val warningApi: QWeatherWarningApi,
-    private val qWeatherAuth: QWeatherAuthInterceptor
+    private val relayAlertsApi: RelayAlertsApi,
+    private val config: DataSourceConfig,
+    private val clock: WallClock
 ) : WarningRepository {
-
-    private val qWeatherConfigured: Boolean
-        get() = qWeatherAuth.hasCredentials
 
     override suspend fun fetchTyphoonAlerts(
         activeTyphoons: List<Typhoon>,
         userLocation: UserLocation?
     ): Result<List<EmergencyAlert>> {
         return runCatching {
-            val official = if (qWeatherConfigured) {
-                fetchOfficialAlerts(activeTyphoons, userLocation)
-            } else {
-                emptyList()
+            val official = when {
+                config.viaRelay -> fetchRelayAlerts(userLocation)
+                config.qWeatherEnabled -> fetchOfficialAlerts(activeTyphoons, userLocation)
+                else -> emptyList()
             }
             val intensity = synthesizeIntensityAlerts(activeTyphoons, userLocation)
             (official + intensity)
@@ -58,6 +64,14 @@ class DefaultWarningRepository @Inject constructor(
                 .sortedByDescending { it.severity.rank }
         }
     }
+
+    /** One request, no location; failures leave only the intensity tips (as before). */
+    private suspend fun fetchRelayAlerts(userLocation: UserLocation?): List<EmergencyAlert> =
+        runCatching { relayAlertsApi.getAlerts() }
+            .onFailure { e -> Log.w(TAG, "Relay alert list failed: ${e.message}") }
+            .getOrNull()
+            ?.let { nearbyRelayAlerts(it, userLocation, clock.nowMs()) }
+            .orEmpty()
 
     private suspend fun fetchOfficialAlerts(
         activeTyphoons: List<Typhoon>,
@@ -196,6 +210,47 @@ class DefaultWarningRepository @Inject constructor(
         private const val TAG = "WarningRepository"
         /** Intensity push radius when user location is known. */
         private const val NEARBY_STORM_KM = 800.0
+
+        /**
+         * Relay mode: a coastal point's alerts apply to a user within this distance.
+         * Alerts are issued per city / county, so this roughly matches "same or next city".
+         */
+        const val RELAY_POINT_RADIUS_KM = 150.0
+
+        /** Relay mode: ignore a list the relay has not refreshed for this long. */
+        const val RELAY_MAX_AGE_MS = 6L * 60 * 60 * 1000
+
+        /**
+         * Picks typhoon-related alerts from the relay's shared list, entirely on the device.
+         * - With a valid [userLocation]: points within [RELAY_POINT_RADIUS_KM] only.
+         * - Without one: every point (same as the old coastal-watchpoint fallback).
+         * - A list older than [RELAY_MAX_AGE_MS] (relay cron stopped) yields nothing.
+         * Duplicates (one alert seen from several points) are dropped by id.
+         */
+        fun nearbyRelayAlerts(
+            response: RelayAlertsResponse,
+            userLocation: UserLocation?,
+            nowMs: Long
+        ): List<EmergencyAlert> {
+            val age = nowMs - response.updatedAtMs
+            if (response.updatedAtMs <= 0L || age > RELAY_MAX_AGE_MS) return emptyList()
+            val user = userLocation?.takeIf { it.isValid }
+            return response.points
+                .asSequence()
+                .filter { point ->
+                    user == null || haversineKm(
+                        user.latitude,
+                        user.longitude,
+                        point.lat,
+                        point.lon
+                    ) <= RELAY_POINT_RADIUS_KM
+                }
+                .flatMap { it.alerts.asSequence() }
+                .filter { it.isTyphoonRelated() }
+                .map { it.toDomain() }
+                .distinctBy { it.id }
+                .toList()
+        }
 
         /** SE China / nearby coastal watchpoints when GPS is unavailable. */
         private val COASTAL_WATCHPOINTS = listOf(

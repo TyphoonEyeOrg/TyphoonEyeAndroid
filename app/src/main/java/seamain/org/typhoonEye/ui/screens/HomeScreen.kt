@@ -797,7 +797,7 @@ private fun CenteredScrollColumn(
 }
 
 /**
- * Build has no weather API key (F-Droid). Explains why there is no live data and
+ * Build has no data source (no relay, no API key). Explains why there is no live data and
  * offers clearly labeled demo data. Deliberately not styled as an error.
  */
 @Composable

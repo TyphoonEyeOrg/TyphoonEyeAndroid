@@ -3,8 +3,9 @@ package seamain.org.typhoonEye.data.repository
 import android.util.Log
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import retrofit2.HttpException
+import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
@@ -24,7 +25,6 @@ import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
 import javax.inject.Inject
-import javax.inject.Named
 
 /**
  * Cache-first typhoon repository:
@@ -36,28 +36,33 @@ import javax.inject.Named
  * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
  *
  * Failures are typed ([TyphoonDataError]); the UI resolves localized text.
- * A build without any API key (e.g. F-Droid) yields [NoDataSourceConfiguredError]
- * without touching the network.
+ * A direct-mode build without any API key (e.g. a local GitHub-flavor build without
+ * `local.properties` keys) yields [NoDataSourceConfiguredError] without touching the network.
+ * The F-Droid build goes through TyphoonEye's relay ([DataSourceConfig.viaRelay]): both
+ * sources are always available there and the app sends no key.
  */
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
-    @Named("juhe_key") private val juheKey: String,
-    private val qWeatherAuth: QWeatherAuthInterceptor,
+    private val config: DataSourceConfig,
     private val localDataSource: TyphoonLocalDataSource,
     private val syncStore: FeedSyncStore,
     private val clock: WallClock
 ) : TyphoonRepository {
 
     private val qWeatherConfigured: Boolean
-        get() = qWeatherAuth.hasCredentials
+        get() = config.qWeatherEnabled
 
     private val juheConfigured: Boolean
-        get() = juheKey.isNotBlank()
+        get() = config.juheEnabled
 
-    /** True when at least one remote data source has credentials in this build. */
+    /** Null in relay mode: no `key` parameter is sent. */
+    private val juheKey: String?
+        get() = config.juheKeyParam
+
+    /** True when at least one remote data source is usable in this build (always via relay). */
     val hasAnyDataSource: Boolean
-        get() = juheConfigured || qWeatherConfigured
+        get() = config.hasAnyDataSource
 
     private val tag = "TyphoonRepository"
 
@@ -165,7 +170,7 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
         if (!hasAnyDataSource) {
-            Log.i(tag, "No data source configured in this build (no JUHE_KEY / QWeather credentials)")
+            Log.i(tag, "No data source configured in this build (no relay, no JUHE_KEY / QWeather credentials)")
             return Result.failure(NoDataSourceConfiguredError())
         }
 
@@ -202,7 +207,7 @@ class DefaultTyphoonRepository @Inject constructor(
                 failures.add(juheFailure(response.errorCode, response.reason))
             } catch (e: Exception) {
                 Log.e(tag, "Juhe detail request failed", e)
-                failures.add(SourceFailure(DataSource.Juhe, SourceFailureKind.Network, detail = e.message))
+                failures.add(exceptionFailure(DataSource.Juhe, e))
             }
         }
 
@@ -235,7 +240,7 @@ class DefaultTyphoonRepository @Inject constructor(
             failures.add(qWeatherFailure(track.code))
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
-            failures.add(SourceFailure(DataSource.QWeather, SourceFailureKind.Network, detail = e.message))
+            failures.add(exceptionFailure(DataSource.QWeather, e))
         }
 
         return Result.failure(TyphoonDetailUnavailableError(id, failures))
@@ -287,9 +292,7 @@ class DefaultTyphoonRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(tag, "Juhe request failed", e)
-            FetchOutcome(
-                failure = SourceFailure(DataSource.Juhe, SourceFailureKind.Network, detail = e.message)
-            )
+            FetchOutcome(failure = exceptionFailure(DataSource.Juhe, e))
         }
     }
 
@@ -321,15 +324,13 @@ class DefaultTyphoonRepository @Inject constructor(
             FetchOutcome(typhoons = typhoons)
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
-            FetchOutcome(
-                failure = SourceFailure(DataSource.QWeather, SourceFailureKind.Network, detail = e.message)
-            )
+            FetchOutcome(failure = exceptionFailure(DataSource.QWeather, e))
         }
     }
 
     private fun juheFailure(errorCode: Int, reason: String?): SourceFailure {
         val kind = when (errorCode) {
-            10001, 10002 -> SourceFailureKind.InvalidKey
+            10001, 10002 -> keyRejected()
             10012, 10013, 10022, 10023 -> SourceFailureKind.QuotaExceeded
             else -> SourceFailureKind.ApiError
         }
@@ -339,12 +340,35 @@ class DefaultTyphoonRepository @Inject constructor(
     /** QWeather v7 status codes: 401/403 auth, 402/429 quota. */
     private fun qWeatherFailure(code: String?): SourceFailure {
         val kind = when (code) {
-            "401", "403" -> SourceFailureKind.InvalidKey
+            "401", "403" -> keyRejected()
             "402", "429" -> SourceFailureKind.QuotaExceeded
             else -> SourceFailureKind.ApiError
         }
         return SourceFailure(DataSource.QWeather, kind, code = code)
     }
+
+    /**
+     * A rejected key is the user's to fix only in direct mode. Through the relay the key is
+     * ours, so the user sees a plain service error instead of "API key rejected".
+     */
+    private fun keyRejected(): SourceFailureKind =
+        if (config.viaRelay) SourceFailureKind.ApiError else SourceFailureKind.InvalidKey
+
+    /**
+     * HTTP errors (e.g. from the relay: 429 rate limit, 502/503 upstream trouble) keep their
+     * status code; everything else (offline, timeout, TLS, parse error) is a network failure.
+     */
+    private fun exceptionFailure(source: DataSource, e: Exception): SourceFailure =
+        if (e is HttpException) {
+            val kind = when (e.code()) {
+                429 -> SourceFailureKind.QuotaExceeded
+                401, 403 -> keyRejected()
+                else -> SourceFailureKind.ApiError
+            }
+            SourceFailure(source, kind, code = e.code().toString(), detail = e.message())
+        } else {
+            SourceFailure(source, SourceFailureKind.Network, detail = e.message)
+        }
 
     companion object {
         const val LIST_TTL_MS: Long = 10L * 60 * 1000
