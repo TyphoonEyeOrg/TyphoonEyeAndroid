@@ -16,3 +16,12 @@ local.properties
 
 #Postman
 postman/
+
+# Output of scripts/build-github.sh and scripts/build-foss.sh
+dist/
+
+# Signing material (never commit)
+*.jks
+*.keystore
+release.keystore
+keystore.properties

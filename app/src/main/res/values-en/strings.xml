@@ -208,6 +208,7 @@
     <string name="timeline_intensity">Intensity %1$s</string>
     <string name="timeline_move">Motion %1$s</string>
     <string name="share_header">[Typhoon Eye] %1$s (%2$s)</string>
+    <string name="share_header_name_only">[Typhoon Eye] %1$s</string>
     <string name="share_id">ID: %1$s</string>
     <string name="share_intensity">Intensity: %1$s</string>
     <string name="share_position">Location: %1$s</string>

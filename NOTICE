@@ -14,6 +14,6 @@ Notable dependencies include (non-exhaustive):
 - Dagger / Hilt — Apache-2.0
 - Material Components / Compose Material — Apache-2.0
 
-Map tiles and weather APIs (OpenStreetMap/Carto-style sources, Amap, Juhe,
+Map tiles and weather APIs (OpenFreeMap / OpenStreetMap, Amap, Juhe,
 QWeather, etc.) are separate services. Their data and branding remain subject
 to the respective providers' terms and are not part of this Apache-2.0 grant.

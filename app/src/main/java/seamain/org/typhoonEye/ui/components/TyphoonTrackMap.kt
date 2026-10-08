@@ -70,6 +70,7 @@ import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.util.CoordTransform
 import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.MapBasemapPolicy
+import seamain.org.typhoonEye.ui.util.OpenFreeMap
 import seamain.org.typhoonEye.ui.util.ResolvedBasemap
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
@@ -102,11 +103,11 @@ private const val LAYER_WIND12_LINE = "ty-wind-12-line"
 private const val LAYER_USER_LINK = "ty-user-link-layer"
 private const val LAYER_USER = "ty-user-layer"
 private const val USER_COLOR = "#1E88E5"
-private const val ASSET_STYLE = "asset://map_style.json"
-private const val ASSET_STYLE_DARK = "asset://map_style_dark.json"
 private const val ASSET_STYLE_AMAP = "asset://map_style_amap.json"
 private const val ASSET_STYLE_AMAP_DARK = "asset://map_style_amap_dark.json"
 private const val DEMO_STYLE = "https://demotiles.maplibre.org/style.json"
+/** Vector style needs style JSON + sprites before it reports loaded; give it longer than raster. */
+private const val OPEN_STYLE_TIMEOUT_MS = 8000L
 
 /** 七级风圈 — amber */
 private const val WIND7_FILL = "#F9A825"
@@ -175,7 +176,7 @@ fun TyphoonTrackMap(
 
     val historyHex = historyColor.toHexRgb()
     val forecastHex = forecastColor.toHexRgb()
-    val openStyleUri = if (darkTheme) ASSET_STYLE_DARK else ASSET_STYLE
+    val openStyleUri = OpenFreeMap.styleUrl(darkTheme)
     val amapAssetUri = if (darkTheme) ASSET_STYLE_AMAP_DARK else ASSET_STYLE_AMAP
 
     val userKey = userLocation?.let { "${it.latitude},${it.longitude}" }.orEmpty()
@@ -326,12 +327,8 @@ fun TyphoonTrackMap(
                                 }
 
                                 fun loadOpenOrCustom() {
-                                    val custom = BuildConfig.MAPLIBRE_STYLE_URL.trim()
-                                    val styleUri = when {
-                                        custom.isBlank() -> openStyleUri
-                                        custom.contains("openfreemap.org") -> openStyleUri
-                                        else -> custom
-                                    }
+                                    val styleUri = BuildConfig.MAPLIBRE_STYLE_URL.trim()
+                                        .ifBlank { openStyleUri }
                                     map.setStyle(Style.Builder().fromUri(styleUri)) { style ->
                                         bindStyle(style)
                                     }
@@ -344,7 +341,7 @@ fun TyphoonTrackMap(
                                         map.setStyle(Style.Builder().fromJson(json)) { style ->
                                             bindStyle(style)
                                         }
-                                        // Fallback chain: asset amap → open carto → demo tiles
+                                        // Fallback chain: asset amap → OpenFreeMap → demo tiles
                                         postDelayed({
                                             if (!mapReady && !useFallback) {
                                                 Log.w(TAG, "Amap style slow/failed, trying asset then open basemap")
@@ -369,7 +366,7 @@ fun TyphoonTrackMap(
                                                     bindStyle(style)
                                                 }
                                             }
-                                        }, 4500)
+                                        }, OPEN_STYLE_TIMEOUT_MS)
                                     }
                                 }
                             } catch (e: Exception) {

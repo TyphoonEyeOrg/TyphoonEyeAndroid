@@ -87,6 +87,29 @@ See [local.properties.example](local.properties.example) and [PRIVACY.md](PRIVAC
 ./gradlew assembleRelease
 ```
 
+### Building locally
+
+Two scripts build the release editions the same way CI does (JDK 21, Android SDK required):
+
+| Script | Edition | Allowed on | Output |
+|--------|---------|------------|--------|
+| `scripts/build-github.sh` | GitHub (universal + per-ABI, built-in keys) | `master` or a `v*` tag | `dist/github/TyphoonEye-v<ver>-app-github-release.apk`, `…-app-github-split-<abi>-release.apk` |
+| `scripts/build-foss.sh` | F-Droid (per-ABI, no keys) | `foss` or an `fdroid-*` tag, clean tree | `dist/foss/app-fdroid-<abi>-release-signed.apk` |
+
+Both run the flavor's unit tests, check every APK's versionCode and signing certificate, and write
+`SHA256SUMS` (with the commit hash). Options: `--skip-tests`, `--debug` (debug-signed, written to
+`dist/*-debug/`, no signing checks), `--force` (other branch; the GitHub script also accepts a dirty
+tree), `-h`. `build-foss.sh --compare <dir>` compares with CI/F-Droid APKs via `apksigcopier`.
+
+`local.properties` (see [local.properties.example](local.properties.example)) needs `sdk.dir` (or
+`ANDROID_HOME`) and, for release builds, `RELEASE_STORE_FILE` (or `./release.keystore`),
+`RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` (or the same environment
+variables). A missing keystore is an error, never a silent debug-key build. The GitHub edition also
+uses the data-source keys. `build-foss.sh` never modifies your checkout: it builds the committed HEAD
+in a temporary `git worktree` with only `sdk.dir` and the signing entries, and fails if any locally
+configured key value is found in the APKs. Use Temurin 21.0.12 (as CI / F-Droid) for byte-identical
+F-Droid APKs.
+
 ### Versioning
 
 Release numbers live in [`version.properties`](version.properties):

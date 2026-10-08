@@ -210,7 +210,7 @@ class DefaultTyphoonRepository @Inject constructor(
                 val typhoon = Typhoon(
                     id = id,
                     name = stormId,
-                    englishName = stormId,
+                    englishName = "",
                     status = if (track.isActive == "1") "active" else "dissipated",
                     strong = infoNow?.type?.let { qWeatherTypeToStrong(it) }.orEmpty(),
                     points = track.track.map { it.toDomain() }.ifEmpty {
