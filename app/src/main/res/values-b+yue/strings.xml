@@ -208,6 +208,7 @@
     <string name="timeline_intensity">強度 %1$s</string>
     <string name="timeline_move">移動 %1$s</string>
     <string name="share_header">【颱風眼】%1$s（%2$s）</string>
+    <string name="share_header_name_only">【颱風眼】%1$s</string>
     <string name="share_id">編號：%1$s</string>
     <string name="share_intensity">強度：%1$s</string>
     <string name="share_position">位置：%1$s</string>

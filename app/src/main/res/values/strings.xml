@@ -209,6 +209,7 @@
     <string name="timeline_intensity">强度 %1$s</string>
     <string name="timeline_move">移动 %1$s</string>
     <string name="share_header">【台风眼】%1$s（%2$s）</string>
+    <string name="share_header_name_only">【台风眼】%1$s</string>
     <string name="share_id">编号：%1$s</string>
     <string name="share_intensity">强度：%1$s</string>
     <string name="share_position">位置：%1$s</string>

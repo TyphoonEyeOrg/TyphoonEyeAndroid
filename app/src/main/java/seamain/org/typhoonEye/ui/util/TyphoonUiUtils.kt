@@ -95,10 +95,43 @@ fun Typhoon.displayName(context: Context): String {
     }
 }
 
+/**
+ * Map a provider intensity label (Juhe / QWeather mappers produce Chinese text such as
+ * 强热带风暴) to a level, or null when the text is not a known category.
+ * Text only, no wind-force fallback, so an unknown label is shown as-is.
+ */
+fun intensityLevelForLabel(raw: String): IntensityLevel? {
+    if (raw.isBlank()) return null
+    return resolveIntensity(raw.trim()).takeIf { it != IntensityLevel.UNKNOWN }
+}
+
+/** Provider intensity text in the UI language (F-Droid !45561: no Chinese in English UI). */
+fun localizeIntensityLabel(context: Context, raw: String): String =
+    intensityLevelForLabel(raw)?.label(context) ?: raw.trim()
+
 fun TyphoonPoint.displayIntensity(context: Context): String =
-    strong.ifBlank {
-        if (power.isNotBlank()) context.getString(R.string.power_level_format, power) else "—"
+    if (strong.isNotBlank()) {
+        localizeIntensityLabel(context, strong)
+    } else if (power.isNotBlank()) {
+        context.getString(R.string.power_level_format, power)
+    } else {
+        "—"
     }
+
+/**
+ * List-card subtitle: English name and id, each once. QWeather storms carry the id
+ * in [Typhoon.englishName], which used to render as "NP_2629 · NP_2629".
+ */
+fun Typhoon.listSubtitle(): String {
+    val en = englishName.trim()
+    val showEnglish = en.isNotBlank() &&
+        !en.equals(name.trim(), ignoreCase = true) &&
+        !en.equals(id.trim(), ignoreCase = true)
+    return buildList {
+        if (showEnglish) add(en)
+        if (id.isNotBlank()) add(id)
+    }.joinToString(" · ")
+}
 
 /** Resolve raw direction text to a stable key used for localization. */
 fun resolveDirectionKey(raw: String): String? {
