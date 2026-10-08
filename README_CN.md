@@ -24,7 +24,8 @@
 - 实时状态通知 + 后台刷新（`WorkManager`）  
 - Material 3、动态取色、深浅色主题  
 - 语言：简体中文、繁體中文、粵語、English  
-- 未配置密钥时使用**演示数据 / 离线缓存**  
+- **F-Droid 版：** 装好即可获取实时台风数据，经台风眼自己的中转服务器获取，应用内不含 API 密钥，也不发送位置（见[数据来源](#数据来源)）  
+- 最近获取的数据会缓存供离线查看；只有在无法获取实时数据且本机没有缓存时，才提供明确标注的**演示模式**（虚构台风）  
 - 双渠道：
   - `github`：支持从 GitHub Releases 应用内更新  
   - `fdroid`：仅通过 F-Droid 更新（无侧载安装权限）
@@ -62,7 +63,7 @@ git clone https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid.git
 cd TyphoonEyeAndroid
 ```
 
-### 可选 API Key
+### 可选 API Key（仅 `github` 渠道）
 
 ```bash
 cp local.properties.example local.properties
@@ -74,7 +75,9 @@ cp local.properties.example local.properties
 | `QWEATHER_API_KEY` 或 JWT 字段 | 和风台风与预警（可选） |
 | `AMAP_KEY` | 中国大陆高德栅格底图（可选） |
 
-不填密钥也可安装运行（演示 / 缓存模式）。  
+这些密钥只用于 `github` 渠道（直接请求服务商）。`fdroid` 渠道会忽略它们（始终不带密钥构建），改为请求台风眼中转服务器。
+
+不填密钥的 `github` 构建也能安装运行，但无法显示实时台风数据：会提示未配置数据源，并提供可选的、明确标注的**演示模式**（虚构示例台风，标注「示例数据，非真实台风」）。  
 详见 [local.properties.example](local.properties.example) 与 [PRIVACY.md](PRIVACY.md)。
 
 ### 常用命令
@@ -103,6 +106,17 @@ VERSION_CODE=15
 
 ---
 
+## 数据来源
+
+| 渠道 | 台风数据 | API 密钥 | 官方预警 |
+|------|----------|----------|----------|
+| `fdroid` | 经台风眼中转服务器 `https://te-relay.seamain.org`（Cloudflare Worker，源码见 [`relay/`](relay/)） | 应用内没有，只作为 Worker Secret 存在 | 中转服务器定时获取一组固定沿海城市的预警；应用下载同一份列表后**在本机**按距离筛选 |
+| `github` | 直接请求聚合 / 和风 | 构建时内置（CI Secrets / `local.properties`） | 授权定位后按大致位置向和风查询 |
+
+中转服务器只转发应用实际用到的请求（聚合的台风列表 / 详情；和风的风暴列表、路径、预报），原样返回服务商的 JSON，并做缓存（列表 10 分钟、详情 30 分钟）。它只用客户端 IP 做限流，不保存，也不记录请求日志；请求会经过 Cloudflare。部署步骤见 [relay/README.md](relay/README.md)。
+
+---
+
 ## 发布与 CI
 
 工作流： [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
@@ -128,7 +142,8 @@ VERSION_CODE=15
 | `metadata/en-US`、`metadata/zh-CN` | 商店文案 |
 | `version.properties` | 版本检测 |
 | productFlavor `fdroid` | 关闭 GitHub 侧载更新 |
-| `AntiFeatures: NonFreeNet` | 第三方气象接口 / 可选高德瓦片 |
+| `AntiFeatures: NonFreeNet` | 台风眼中转服务器 → 第三方气象接口；可选高德瓦片 |
+| `relay/` | F-Droid 版使用的 Cloudflare Worker 中转服务器源码，不参与 Gradle 构建 |
 
 ### 投稿步骤
 
@@ -139,7 +154,7 @@ VERSION_CODE=15
    git push origin foss   # 或你的主分支
    git push origin v1.2.0
    ```
-3. 本地验证无密钥可编过：
+3. 本地验证 F-Droid 版可编过（`fdroid` 渠道始终不含密钥）：
    ```bash
    ./gradlew assembleFdroidRelease
    ```
@@ -152,7 +167,8 @@ VERSION_CODE=15
 
 - 无广告、无统计 SDK  
 - 定位**仅**用于可选距离预警，不会上传到台风眼自有服务器  
-- 气象请求发往你配置的第三方 API  
+- F-Droid 版：台风数据请求经 Cloudflare 和台风眼中转服务器；中转服务器会用到 IP 做限流，但不保存；你的位置不会发给它  
+- GitHub 版：气象请求直接发往构建时内置密钥的第三方 API  
 
 全文见 [PRIVACY.md](PRIVACY.md)。
 

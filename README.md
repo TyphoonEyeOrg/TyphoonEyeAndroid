@@ -24,7 +24,8 @@ Built with **Jetpack Compose** and **Material Design 3**.
 - Live status notification + background refresh (`WorkManager`)
 - Material 3, dynamic color, light / dark theme
 - Languages: Simplified Chinese, Traditional Chinese, Cantonese, English
-- **Demo / offline cache** when API keys are not configured
+- **F-Droid build:** live typhoon data right after install, fetched through TyphoonEye's own relay server — no API key in the app, no location sent (see [Data sources](#data-sources))
+- Last fetched data is cached for offline use; a clearly labeled **demo mode** (fictional storms) is offered only when live data can't be loaded and nothing is cached
 - Two distribution flavors:
   - `github` — in-app update from GitHub Releases
   - `fdroid` — updates via F-Droid only (no sideload installer)
@@ -62,7 +63,7 @@ git clone https://github.com/TyphoonEyeOrg/TyphoonEyeAndroid.git
 cd TyphoonEyeAndroid
 ```
 
-### Optional API keys
+### Optional API keys (`github` flavor only)
 
 Copy the example file and fill only what you need:
 
@@ -76,7 +77,12 @@ cp local.properties.example local.properties
 | `QWEATHER_API_KEY` or JWT fields | QWeather typhoon + warnings (optional) |
 | `AMAP_KEY` | Amap raster basemap in mainland China (optional) |
 
-Without keys the app still installs and runs with **demo / cached** data.
+These keys are used only by the `github` flavor, which calls the providers directly. The `fdroid`
+flavor ignores them (it is always built without keys) and talks to the TyphoonEye relay instead.
+
+A `github` build without any key installs and runs, but cannot show live typhoon data: it says no
+live data source is configured and offers an optional, clearly labeled **demo mode** (fictional sample
+storms, marked "Sample data — not real typhoons").
 
 See [local.properties.example](local.properties.example) and [PRIVACY.md](PRIVACY.md).
 
@@ -106,6 +112,20 @@ CI may override via `VERSION_NAME` / `VERSION_CODE` env vars. Tag releases as `v
 
 ---
 
+## Data sources
+
+| Build | Typhoon data | API keys | Official warnings |
+|-------|--------------|----------|-------------------|
+| `fdroid` | Through the TyphoonEye relay `https://te-relay.seamain.org` (Cloudflare Worker, source in [`relay/`](relay/)) | None in the app; Worker secrets only | Relay fetches warnings for a fixed list of coastal cities; the app downloads the shared list and filters by distance **on the device** |
+| `github` | Directly from Juhe / QWeather | Built in at build time (CI secrets / `local.properties`) | Queried from QWeather at the device's approximate position (if location is allowed) |
+
+The relay forwards only the calls the app needs (typhoon list / detail from Juhe; storm list, track and
+forecast from QWeather), returns the providers' JSON unchanged and caches it (lists 10 min, details
+30 min). It uses the client IP only for rate limiting and does not store it; it keeps no request logs.
+Requests to it pass through Cloudflare. Deployment: [relay/README.md](relay/README.md).
+
+---
+
 ## Releases & CI
 
 Workflow: [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
@@ -122,7 +142,8 @@ Secrets used by CI (repository settings): API keys (optional), release keystore 
 - App source remains on **GitHub**
 - Packaging draft: [`metadata/seamain.org.typhoonEye.yml`](metadata/seamain.org.typhoonEye.yml)
 - Submit packaging via GitLab **[fdroiddata](https://gitlab.com/fdroid/fdroiddata)** MR (metadata only)
-- Flavor: `fdroid` · AntiFeature: `NonFreeNet` (third-party weather / optional Amap tiles)
+- Flavor: `fdroid` · AntiFeature: `NonFreeNet` (TyphoonEye relay → third-party weather APIs; optional Amap tiles)
+- The F-Droid build contains no API keys; `relay/` is not part of the Gradle build
 
 Checklist (CN): [README_CN.md](README_CN.md#f-droid-投稿说明)
 
@@ -132,7 +153,8 @@ Checklist (CN): [README_CN.md](README_CN.md#f-droid-投稿说明)
 
 - No ads, no analytics SDKs  
 - Location is used **only** for optional distance alerts and is not uploaded to a TyphoonEye server  
-- Weather requests go to third-party APIs you configure  
+- F-Droid build: typhoon data requests go through Cloudflare and the TyphoonEye relay; the relay uses your IP only for rate limiting and does not store it; your location is never sent to it  
+- GitHub build: weather requests go directly to the third-party APIs built into it  
 
 Full text: [PRIVACY.md](PRIVACY.md)
 
