@@ -57,7 +57,13 @@ describe("forwarding", () => {
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
     const pem = `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...pkcs8))}\n-----END PRIVATE KEY-----`;
-    const env = makeEnv({ QWEATHER_API_KEY: undefined, QWEATHER_KID: "KID1", QWEATHER_PROJECT_ID: "PROJ1", QWEATHER_PRIVATE_KEY: pem });
+    const env = makeEnv({
+      QWEATHER_API_KEY: undefined,
+      QWEATHER_KID: "KID1",
+      QWEATHER_PROJECT_ID: "PROJ1",
+      QWEATHER_DEVELOPER_ID: "Q123456789",
+      QWEATHER_PRIVATE_KEY: pem,
+    });
     const upstream = new FakeUpstream(() => json(QW_OK));
     await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), env, makeDeps(upstream, { now: T0 }));
 
@@ -66,7 +72,7 @@ describe("forwarding", () => {
     const [h, p, s] = auth.replace("Bearer ", "").split(".");
     const decode = (x: string) => JSON.parse(atob(x.replace(/-/g, "+").replace(/_/g, "/")));
     expect(decode(h)).toEqual({ alg: "EdDSA", kid: "KID1" });
-    expect(decode(p).sub).toBe("PROJ1");
+    expect(decode(p)).toEqual({ iss: "Q123456789", sub: "PROJ1", iat: T0 / 1000 - 30, exp: T0 / 1000 - 30 + 900 });
     const sig = Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
     const ok = await crypto.subtle.verify({ name: "Ed25519" }, pair.publicKey, sig, new TextEncoder().encode(`${h}.${p}`));
     expect(ok).toBe(true);

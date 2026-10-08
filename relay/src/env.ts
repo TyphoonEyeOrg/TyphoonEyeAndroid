@@ -19,9 +19,14 @@ export interface Env {
   QWEATHER_API_KEY?: string;
   /** Per-account QWeather API host, e.g. `abc123xyz.re.qweatherapi.com`. */
   QWEATHER_HOST?: string;
-  /** Optional JWT auth instead of QWEATHER_API_KEY. */
+  /**
+   * QWeather JWT auth (recommended; used instead of QWEATHER_API_KEY when all four are set):
+   * credential ID (`kid`), project ID (`sub`), developer ID (`iss`, "Q" + 9 letters/digits,
+   * console → Settings) and the Ed25519 private key as PKCS#8 PEM.
+   */
   QWEATHER_KID?: string;
   QWEATHER_PROJECT_ID?: string;
+  QWEATHER_DEVELOPER_ID?: string;
   QWEATHER_PRIVATE_KEY?: string;
   /** Optional secret salt for hashing client IPs into rate-limit keys. */
   IP_HASH_SALT?: string;

@@ -1,5 +1,5 @@
 import type { Deps, Env } from "./env";
-import { qweatherAuthHeader, qweatherBaseUrl, qweatherConfigured } from "./qweatherAuth";
+import { pemBody, qweatherAuthHeader, qweatherBaseUrl, qweatherConfigured } from "./qweatherAuth";
 import type { Source, UpstreamRoute } from "./routes";
 
 export const JUHE_BASE_URL = "https://apis.juhe.cn";
@@ -19,7 +19,8 @@ export interface UpstreamResult {
 /** Removes any secret value that a provider might echo back in an error body. */
 export function scrubSecrets(body: string, env: Env): string {
   let out = body;
-  for (const secret of [env.JUHE_KEY, env.QWEATHER_API_KEY]) {
+  const privateKey = env.QWEATHER_PRIVATE_KEY ? pemBody(env.QWEATHER_PRIVATE_KEY) : undefined;
+  for (const secret of [env.JUHE_KEY, env.QWEATHER_API_KEY, privateKey]) {
     const s = secret?.trim();
     if (s && s.length >= 6) out = out.split(s).join("****");
   }

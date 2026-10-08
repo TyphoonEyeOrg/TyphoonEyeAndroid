@@ -4,7 +4,7 @@ Cloudflare Worker used by the **F-Droid build** (`fdroid` flavor) of TyphoonEye.
 It is reached at `https://te-relay.seamain.org` (hard-coded as `RELAY_BASE_URL` in
 `app/build.gradle.kts`). The GitHub build does not use it.
 
-- **Keys stay here.** Juhe / QWeather API keys are Worker secrets. The app contains none.
+- **Keys stay here.** The Juhe key and the QWeather credentials (JWT signing key or API key) are Worker secrets. The app contains none.
 - **Allowlist only.** Exactly the provider calls the app makes, with validated parameters.
   Responses are the providers' JSON, unchanged, so the app parses them with the same code
   as the GitHub build.
@@ -129,12 +129,14 @@ npx wrangler kv namespace create RELAY_KV
 
 # 2. Secrets (prompted, never written to disk or the repo). Set what you have:
 npx wrangler secret put JUHE_KEY
-npx wrangler secret put QWEATHER_API_KEY
 npx wrangler secret put QWEATHER_HOST           # e.g. abc123xyz.re.qweatherapi.com
-#   optional instead of QWEATHER_API_KEY (JWT):
-#   npx wrangler secret put QWEATHER_KID
-#   npx wrangler secret put QWEATHER_PROJECT_ID
-#   npx wrangler secret put QWEATHER_PRIVATE_KEY  # PKCS#8 PEM
+#   QWeather, recommended: JWT (all four needed; see "QWeather auth" below)
+npx wrangler secret put QWEATHER_KID            # credential ID → JWT header `kid`
+npx wrangler secret put QWEATHER_PROJECT_ID     # project ID → payload `sub`
+npx wrangler secret put QWEATHER_DEVELOPER_ID   # developer ID, Q + 9 letters/digits → payload `iss`
+npx wrangler secret put QWEATHER_PRIVATE_KEY < ed25519-private.pem   # Ed25519 PKCS#8 PEM
+#   QWeather, fallback only when JWT is not set up:
+#   npx wrangler secret put QWEATHER_API_KEY
 #   optional: npx wrangler secret put IP_HASH_SALT  # any random string
 
 # 3. Deploy. The custom domain te-relay.seamain.org (DNS record + certificate) is created
@@ -147,6 +149,26 @@ curl "https://te-relay.seamain.org/v1/juhe/fapigw/typhoon/active"
 curl https://te-relay.seamain.org/v1/alerts      # updatedAtMs > 0 after the first cron run
 ```
 
+QWeather auth
+([docs](https://dev.qweather.com/docs/configuration/authentication/)):
+
+- **JWT is the recommended path.** Generate a key pair
+  (`openssl genpkey -algorithm ED25519 -out ed25519-private.pem` and
+  `openssl pkey -pubout -in ed25519-private.pem > ed25519-public.pem`), add the **public**
+  key as a JSON Web Token credential in the QWeather console (Project management), and set
+  the four secrets above. The credential ID is `QWEATHER_KID`, the project ID
+  `QWEATHER_PROJECT_ID`; the developer ID (console → Settings) is `QWEATHER_DEVELOPER_ID`.
+  Keep the private key out of the repo.
+- The relay signs `{alg: "EdDSA", kid}` / `{iss, sub, iat: now − 30 s, exp: iat + 900 s}`
+  (nothing else: `typ`, `aud`, `nbf` are reserved by QWeather) and reuses the token until
+  shortly before it expires.
+- When all four JWT secrets are set, the relay uses JWT and ignores `QWEATHER_API_KEY`
+  (QWeather may reject requests that mix auth methods). Otherwise it falls back to
+  `QWEATHER_API_KEY`. QWeather limits daily requests made with an API KEY from
+  2027-01-01, so do not rely on the fallback long term.
+- If QWeather answers 401, check the token in the console's JWT validator (it only accepts
+  tokens for your own account).
+
 Notes:
 
 - `te-relay.seamain.org` is a first-level subdomain, so the Universal SSL certificate
@@ -154,7 +176,9 @@ Notes:
 - `workers_dev = false`: no `*.workers.dev` URL (often unreachable from mainland China).
 - The rate-limit `namespace_id`s (`41001`, `41002`) must be unique in the account.
 - Rate limits: see [Rate limits](#rate-limits).
-- Rotate a key: `npx wrangler secret put JUHE_KEY` again (takes effect immediately).
+- Rotate a key: `npx wrangler secret put JUHE_KEY` again (takes effect immediately). For the
+  QWeather JWT key, add the new public key in the console first, then put the new
+  `QWEATHER_KID` and `QWEATHER_PRIVATE_KEY`, then delete the old credential.
 - In the Cloudflare dashboard, keep Workers Logs / Logpush off for this Worker.
 
 ## Rate limits
