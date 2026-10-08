@@ -127,7 +127,10 @@ npx wrangler login                     # opens a browser; owner's Cloudflare acc
 # 1. KV namespace → paste the printed id into wrangler.toml ([[kv_namespaces]] id)
 npx wrangler kv namespace create RELAY_KV
 
-# 2. Secrets (prompted, never written to disk or the repo). Set what you have:
+# 2. Secrets — set only via the Cloudflare dashboard or wrangler on your own machine.
+#    Dashboard: Workers & Pages → typhooneye-relay → Settings → Variables and Secrets
+#    → Add (type Secret). Or, from this directory (prompted / piped; never paste values
+#    into chat, Issue comments, or tool logs):
 npx wrangler secret put JUHE_KEY
 npx wrangler secret put QWEATHER_HOST           # e.g. abc123xyz.re.qweatherapi.com
 #   QWeather, recommended: JWT (all four needed; see "QWeather auth" below)
