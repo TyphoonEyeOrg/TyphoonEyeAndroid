@@ -40,6 +40,7 @@ object NetworkModule {
             apiKey = BuildConfig.QWEATHER_API_KEY,
             kid = BuildConfig.QWEATHER_KID,
             projectId = BuildConfig.QWEATHER_PROJECT_ID,
+            developerId = BuildConfig.QWEATHER_DEVELOPER_ID,
             privateKeyPem = BuildConfig.QWEATHER_PRIVATE_KEY
         )
 
