@@ -287,7 +287,7 @@ jobs:
           name: TyphoonEye 台风眼 ${{ steps.get_version.outputs.tag_name }}
           body_path: release_notes.md
           files: output_github/*.apk
-          draft: false
+          draft: true  # v* releases start as drafts; publish manually after testing
           prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: true
