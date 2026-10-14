@@ -3,9 +3,10 @@ name: Build & Release Android APK
 on:
   push:
     branches: [ "main", "master", "foss" ]
-    # No tag trigger on foss: foss only gets fdroid-* tags, and the fdroid-*
-    # reference Release is created by hand from this branch's CI artifacts.
-    # v* tags/Releases belong to master (GitHub edition).
+    # Only v* tags trigger: they cut the GitHub-edition Release from foss.
+    # fdroid-* tags still trigger nothing; the fdroid-* reference Release is
+    # created by hand from this branch's CI artifacts.
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master", "foss" ]
   workflow_dispatch:
@@ -72,6 +73,9 @@ jobs:
           if [ -n "${{ secrets.QWEATHER_PROJECT_ID }}" ]; then
             echo "QWEATHER_PROJECT_ID=${{ secrets.QWEATHER_PROJECT_ID }}" >> local.properties
           fi
+          if [ -n "${{ secrets.QWEATHER_DEVELOPER_ID }}" ]; then
+            echo "QWEATHER_DEVELOPER_ID=${{ secrets.QWEATHER_DEVELOPER_ID }}" >> local.properties
+          fi
           if [ -n "${{ secrets.QWEATHER_PRIVATE_KEY }}" ]; then
             echo "QWEATHER_PRIVATE_KEY=${{ secrets.QWEATHER_PRIVATE_KEY }}" >> local.properties
           fi
@@ -101,6 +105,11 @@ jobs:
           VERSION_NAME="${TAG_NAME#v}"
           # versionCode is never derived from commit count; Gradle reads
           # version.properties (F-Droid low-bit ABI scheme, base*10+1..4).
+          PROPS_NAME="$(sed -n 's/^VERSION_NAME=//p' version.properties | tr -d '[:space:]')"
+          if [[ "${{ github.ref }}" == refs/tags/v* && "$VERSION_NAME" != "$PROPS_NAME" ]]; then
+            echo "::error::Tag $TAG_NAME does not match version.properties VERSION_NAME=$PROPS_NAME"
+            exit 1
+          fi
 
           echo "VERSION=$TAG_NAME" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
@@ -128,7 +137,7 @@ jobs:
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: ./gradlew assembleFdroidDebug --stacktrace
 
-      # No github-flavor build on foss: GitHub-edition APKs come only from master.
+      # github-flavor APKs are built only on v* tags (see "GitHub edition" steps below).
 
       # fdroid flavor APK is uploaded too so F-Droid's reproducible-build
       # check can compare against the same binary it builds.
@@ -199,8 +208,10 @@ jobs:
           path: output_apks/*.apk
           retention-days: 14
 
+      # fdroid-flavor Release (manual dispatch only). Never on v* tags: those
+      # publish the GitHub edition below and must not carry fdroid APKs.
       - name: Create & Publish GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.create_release == true }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/v')) || inputs.create_release == true }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.tag_name }}
@@ -213,5 +224,73 @@ jobs:
           # Allow re-running on the same tag (e.g. after CI fixes) to update assets.
           update_release_body: true
           update_release_assets: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---- GitHub edition: v* tags only ----------------------------------
+      # Runs after the fdroid steps so their environment is untouched.
+      # versionName/versionCode come from version.properties (the tag was
+      # checked against VERSION_NAME above). Splits only, no universal APK:
+      # arm64-v8a/armeabi-v7a/x86/x86_64 -> versionCode base*10+1..4 (171-174).
+      - name: Build Release APK (github flavor, v* tag)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          VERSION_NAME: ''
+          VERSION_CODE: ''
+        run: |
+          {
+            echo "sdk.dir=$ANDROID_HOME"
+            if [ -n "${{ secrets.JUHE_KEY }}" ]; then echo "JUHE_KEY=${{ secrets.JUHE_KEY }}"; fi
+            if [ -n "${{ secrets.JUHE_API_KEY }}" ]; then echo "JUHE_API_KEY=${{ secrets.JUHE_API_KEY }}"; fi
+            if [ -n "${{ secrets.JUHEKEY }}" ]; then echo "JUHEKEY=${{ secrets.JUHEKEY }}"; fi
+            if [ -n "${{ secrets.QWEATHER_API_KEY }}" ]; then echo "QWEATHER_API_KEY=${{ secrets.QWEATHER_API_KEY }}"; fi
+            if [ -n "${{ secrets.QWEATHER_KID }}" ]; then echo "QWEATHER_KID=${{ secrets.QWEATHER_KID }}"; fi
+            if [ -n "${{ secrets.QWEATHER_PROJECT_ID }}" ]; then echo "QWEATHER_PROJECT_ID=${{ secrets.QWEATHER_PROJECT_ID }}"; fi
+            if [ -n "${{ secrets.QWEATHER_DEVELOPER_ID }}" ]; then echo "QWEATHER_DEVELOPER_ID=${{ secrets.QWEATHER_DEVELOPER_ID }}"; fi
+            if [ -n "${{ secrets.QWEATHER_PRIVATE_KEY }}" ]; then echo "QWEATHER_PRIVATE_KEY=${{ secrets.QWEATHER_PRIVATE_KEY }}"; fi
+            if [ -f release.keystore ]; then
+              echo "RELEASE_STORE_FILE=release.keystore"
+              echo "RELEASE_STORE_PASSWORD=${{ secrets.RELEASE_STORE_PASSWORD }}"
+              echo "RELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}"
+              echo "RELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}"
+            fi
+          } > local.properties
+          ./gradlew assembleGithubRelease --stacktrace
+
+      - name: Collect GitHub-edition APKs (v* tag)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          mkdir -p output_github
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            src="app/build/outputs/apk/github/release/app-github-${abi}-release.apk"
+            if [ ! -f "$src" ]; then
+              echo "::error::Missing $src"
+              exit 1
+            fi
+            cp "$src" "output_github/TyphoonEye-${{ env.VERSION }}-app-github-split-${abi}-release.apk"
+          done
+          ls -lh output_github/
+
+      - name: Upload GitHub-edition APK Artifacts (v* tag)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: TyphoonEye-github-APK-${{ env.VERSION }}
+          path: output_github/*.apk
+          retention-days: 14
+
+      - name: Create & Publish GitHub Release (GitHub edition, v* tag)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag_name }}
+          name: TyphoonEye 台风眼 ${{ steps.get_version.outputs.tag_name }}
+          body_path: release_notes.md
+          files: output_github/*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
