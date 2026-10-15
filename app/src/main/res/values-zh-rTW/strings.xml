@@ -143,6 +143,7 @@
     <string name="update_ok">好的</string>
     <string name="update_error_check_failed">檢查更新失敗，請稍後重試</string>
     <string name="update_error_no_apk">最新發布未包含 APK 安裝包</string>
+    <string name="update_no_compatible_apk">找不到適合本機 CPU 架構的安裝包，請前往發布頁手動下載。</string>
     <string name="update_error_no_release">倉庫尚未發佈正式版本，請稍後再試</string>
     <string name="update_error_http">伺服器返回錯誤（%1$d）</string>
     <string name="update_error_rate_limited">GitHub 請求過於頻繁，請稍後再試</string>

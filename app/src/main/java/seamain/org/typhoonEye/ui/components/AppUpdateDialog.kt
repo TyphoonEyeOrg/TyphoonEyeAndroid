@@ -105,7 +105,11 @@ private fun UpdateAvailableDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    text = stringResource(R.string.update_available_body, info.versionName),
+                    text = if (info.apkUrl.isBlank()) {
+                        stringResource(R.string.update_no_compatible_apk)
+                    } else {
+                        stringResource(R.string.update_available_body, info.versionName)
+                    },
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (info.releaseNotes.isNotBlank()) {
@@ -125,13 +129,26 @@ private fun UpdateAvailableDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDownload) {
-                Text(stringResource(R.string.update_download))
+            if (info.apkUrl.isBlank()) {
+                // No APK matches this device's ABIs: manual download only (TYP-5).
+                TextButton(onClick = onOpenReleasePage) {
+                    Text(stringResource(R.string.update_view_release))
+                }
+            } else {
+                TextButton(onClick = onDownload) {
+                    Text(stringResource(R.string.update_download))
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onOpenReleasePage) {
-                Text(stringResource(R.string.update_view_release))
+            if (info.apkUrl.isBlank()) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.update_later))
+                }
+            } else {
+                TextButton(onClick = onOpenReleasePage) {
+                    Text(stringResource(R.string.update_view_release))
+                }
             }
         }
     )
