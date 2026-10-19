@@ -39,7 +39,7 @@ describe("best-effort KV on the request path", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=1800");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
     expect(kv.failedPuts).toBe(1); // the detail (budget counts are batched in memory)
     // Minimal log line: nothing about the request.
     expect(warn).toHaveBeenCalledWith("relay: KV write failed");

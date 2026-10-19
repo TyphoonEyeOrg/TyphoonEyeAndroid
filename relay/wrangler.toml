@@ -63,6 +63,6 @@ MAX_ALERT_POINTS_PER_RUN = "40"
 # each isolate batches its counts (KV merge every 20 calls or 5 min), so some overshoot is
 # possible, and a KV failure lets requests through.
 # Set to about 80 % of the account's daily quota; "0" blocks all calls to that provider.
-JUHE_DAILY_BUDGET = "400"
+JUHE_DAILY_BUDGET = "40"
 # QWeather: tropical calls (list/track/forecast) plus the cron's weather-alert calls.
 QWEATHER_DAILY_BUDGET = "4000"

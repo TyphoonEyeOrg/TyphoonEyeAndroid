@@ -213,12 +213,12 @@ describe("known-storm guard", () => {
 
 describe("daily upstream budget", () => {
   it("reads limits from vars, with defaults", () => {
-    expect(DEFAULT_DAILY_BUDGET).toEqual({ juhe: 400, qweather: 4000 });
-    expect(dailyLimit("juhe", makeEnv())).toBe(400);
+    expect(DEFAULT_DAILY_BUDGET).toEqual({ juhe: 40, qweather: 4000 });
+    expect(dailyLimit("juhe", makeEnv())).toBe(40);
     expect(dailyLimit("qweather", makeEnv())).toBe(4000);
     expect(dailyLimit("juhe", makeEnv({ JUHE_DAILY_BUDGET: "50" }))).toBe(50);
     expect(dailyLimit("qweather", makeEnv({ QWEATHER_DAILY_BUDGET: "0" }))).toBe(0);
-    expect(dailyLimit("juhe", makeEnv({ JUHE_DAILY_BUDGET: "lots" }))).toBe(400);
+    expect(dailyLimit("juhe", makeEnv({ JUHE_DAILY_BUDGET: "lots" }))).toBe(40);
   });
 
   it("counts every provider call per source; cache hits are free", async () => {

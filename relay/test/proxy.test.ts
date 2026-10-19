@@ -12,7 +12,7 @@ describe("forwarding", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=600");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
     const sent = new URL(upstream.requests[0].url);
     expect(`${sent.origin}${sent.pathname}`).toBe("https://apis.juhe.cn/fapigw/typhoon/active");
     expect(sent.searchParams.get("key")).toBe(SECRETS.JUHE_KEY);
@@ -92,7 +92,7 @@ describe("caching", () => {
     const fromKv = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, clock, null));
 
     expect(upstream.requests).toHaveLength(1);
-    expect(fromKv.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(fromKv.headers.get("Cache-Control")).toBe("public, max-age=3060");
   });
 
   it("refetches a list after 10 minutes and a detail after 30", async () => {

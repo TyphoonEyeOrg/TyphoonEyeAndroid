@@ -45,6 +45,7 @@ export class RouteError extends Error {
 
 export const LIST_TTL_SECONDS = 10 * 60;
 export const DETAIL_TTL_SECONDS = 30 * 60;
+export const JUHE_TTL_SECONDS = 60 * 60;
 
 /** Juhe tfid, e.g. `202609`; tropical depressions may look like `2026D07`. */
 const TFID = /^\d{4}[A-Z]?\d{2}$/;
@@ -54,7 +55,7 @@ const YEAR = /^\d{4}$/;
 
 /** Juhe's list of active storms (the only Juhe list there is). */
 export function juheListRoute(): UpstreamRoute {
-  return { kind: "upstream", source: "juhe", path: "fapigw/typhoon/active", params: [], ttlSeconds: LIST_TTL_SECONDS };
+  return { kind: "upstream", source: "juhe", path: "fapigw/typhoon/active", params: [], ttlSeconds: JUHE_TTL_SECONDS };
 }
 
 /** QWeather's NW Pacific storm list for [year] (active and past storms of that year). */
@@ -95,7 +96,7 @@ export function matchRoute(url: URL, nowMs: number): Route {
         source: "juhe",
         path: "fapigw/typhoon/detail",
         params: [["tfid", tfid]],
-        ttlSeconds: DETAIL_TTL_SECONDS,
+        ttlSeconds: JUHE_TTL_SECONDS,
         knownIn: { list: juheListRoute(), id: tfid },
       };
     }
