@@ -39,6 +39,7 @@ import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
+import seamain.org.typhoonEye.ui.util.unwrapLng
 import seamain.org.typhoonEye.ui.util.windCircleRing
 import seamain.org.typhoonEye.ui.util.windRadii10
 import seamain.org.typhoonEye.ui.util.windRadii12
@@ -185,18 +186,23 @@ fun TrackCanvas(
             }
         }
 
+        // #14 / TYP-55: unwrap longitudes against the storm's current position so a
+        // track crossing 180° is drawn short instead of spanning the canvas.
+        val refLng = (history.lastOrNull() ?: forecast.firstOrNull())?.lng
+        fun lngOf(lng: Double): Double = refLng?.let { unwrapLng(lng, it) } ?: lng
+
         // Expand bounds to include wind circles so they fit on canvas.
         var minLat = all.minOf { it.lat }
         var maxLat = all.maxOf { it.lat }
-        var minLng = all.minOf { it.lng }
-        var maxLng = all.maxOf { it.lng }
+        var minLng = all.minOf { lngOf(it.lng) }
+        var maxLng = all.maxOf { lngOf(it.lng) }
         if (current != null && windRings.isNotEmpty()) {
             windRings.forEach { (_, radii) ->
                 windCircleRing(current.lat, current.lng, radii, stepsPerQuadrant = 8).forEach { (lat, lng) ->
                     minLat = minOf(minLat, lat)
                     maxLat = maxOf(maxLat, lat)
-                    minLng = minOf(minLng, lng)
-                    maxLng = maxOf(maxLng, lng)
+                    minLng = minOf(minLng, lngOf(lng))
+                    maxLng = maxOf(maxLng, lngOf(lng))
                 }
             }
         }
@@ -205,7 +211,7 @@ fun TrackCanvas(
         val lngSpan = (maxLng - minLng).coerceAtLeast(0.5)
 
         fun project(lat: Double, lng: Double): Offset {
-            val x = pad + ((lng - minLng) / lngSpan * (size.width - pad * 2)).toFloat()
+            val x = pad + ((lngOf(lng) - minLng) / lngSpan * (size.width - pad * 2)).toFloat()
             val y = pad + ((maxLat - lat) / latSpan * (size.height - pad * 2)).toFloat()
             return Offset(x, y)
         }
