@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.ui.util.MapBasemap
 
@@ -36,8 +37,16 @@ data class UserSettings(
     val appLanguage: AppLanguage = AppLanguage.System,
     val liveActivityEnabled: Boolean = true,
     val emergencyAlertsEnabled: Boolean = true,
-    /** Prefer device GPS for official warning lookups. */
-    val locationAlertsEnabled: Boolean = true,
+    /**
+     * Prefer device GPS for official warning lookups. Opt-in on the github flavor
+     * (TYP-58); the repository resolves the per-flavor default. The in-memory default
+     * is false so nothing is sent before DataStore has loaded.
+     */
+    val locationAlertsEnabled: Boolean = false,
+    /** Raw stored toggle value; null = user never touched it (TYP-58 upgrade notice). */
+    val locationAlertsStoredValue: Boolean? = null,
+    /** TYP-58: the one-time opt-in notice was already shown (or answered). */
+    val locationOptInNoticeShown: Boolean = false,
     val dynamicColorEnabled: Boolean = true,
     /** Track map basemap; default auto (CN → 高德, else international). */
     val mapBasemap: MapBasemap = MapBasemap.Auto,
@@ -45,7 +54,11 @@ data class UserSettings(
     val cachedUserLocation: UserLocation? = null
 )
 
-class UserPreferencesRepository(private val context: Context) {
+class UserPreferencesRepository(
+    private val context: Context,
+    /** Per-flavor default for location alerts: github=false, fdroid=true (TYP-58). */
+    val locationAlertsDefault: Boolean = BuildConfig.LOCATION_ALERTS_DEFAULT
+) {
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
         UserSettings(
@@ -54,7 +67,12 @@ class UserPreferencesRepository(private val context: Context) {
                 ?: AppLanguage.System,
             liveActivityEnabled = prefs[Keys.LIVE_ACTIVITY] ?: true,
             emergencyAlertsEnabled = prefs[Keys.EMERGENCY_ALERTS] ?: true,
-            locationAlertsEnabled = prefs[Keys.LOCATION_ALERTS] ?: true,
+            locationAlertsEnabled = LocationOptIn.resolveEnabled(
+                prefs[Keys.LOCATION_ALERTS],
+                locationAlertsDefault
+            ),
+            locationAlertsStoredValue = prefs[Keys.LOCATION_ALERTS],
+            locationOptInNoticeShown = prefs[Keys.LOCATION_OPT_IN_NOTICE_SHOWN] ?: false,
             dynamicColorEnabled = prefs[Keys.DYNAMIC_COLOR] ?: true,
             mapBasemap = MapBasemap.fromStorage(prefs[Keys.MAP_BASEMAP]),
             cachedUserLocation = prefs.toCachedLocation()
@@ -83,6 +101,11 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setLocationAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.LOCATION_ALERTS] = enabled }
+    }
+
+    /** TYP-58: remember that the one-time opt-in notice has been handled. */
+    suspend fun markLocationOptInNoticeShown() {
+        context.dataStore.edit { it[Keys.LOCATION_OPT_IN_NOTICE_SHOWN] = true }
     }
 
     suspend fun setDynamicColorEnabled(enabled: Boolean) {
@@ -152,5 +175,6 @@ class UserPreferencesRepository(private val context: Context) {
         val CACHED_LOC_AT = longPreferencesKey("cached_user_loc_at")
         val CACHED_LOC_LABEL = stringPreferencesKey("cached_user_loc_label")
         val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
+        val LOCATION_OPT_IN_NOTICE_SHOWN = booleanPreferencesKey("location_opt_in_notice_shown")
     }
 }

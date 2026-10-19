@@ -255,4 +255,9 @@
     <string name="oss_jetpack_desc">本地 SQLite 資料庫持久化、響應式配置儲存與背景 Live 狀態定時調度</string>
     <string name="oss_eddsa_desc">用於和風天氣 API 的 Ed25519 / EdDSA 密碼學數位簽章演算法實現</string>
     <string name="oss_test_desc">Kotlin Flow 響應式資料流測試庫與 Mockito 單元測試模擬框架</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">依定位推播改為需手動開啟</string>
+    <string name="location_opt_in_notice_body">%1$s 不再預設使用你的位置。依定位推播（距離提醒與你附近的官方預警）在你自行開啟前會維持關閉，之後也可以隨時在設定中變更。</string>
+    <string name="location_opt_in_notice_turn_on">去開啟</string>
+    <string name="location_opt_in_notice_dismiss">暫不</string>
 </resources>

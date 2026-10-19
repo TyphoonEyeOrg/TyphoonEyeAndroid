@@ -61,6 +61,7 @@ import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.domain.model.AppUpdateState
 import seamain.org.typhoonEye.ui.TyphoonViewModel
 import seamain.org.typhoonEye.ui.components.AppUpdateHost
+import seamain.org.typhoonEye.ui.components.LocationOptInNoticeDialog
 import seamain.org.typhoonEye.ui.navigation.AppDestination
 import seamain.org.typhoonEye.ui.screens.DetailScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
@@ -165,7 +166,6 @@ fun TyphoonApp(
         mutableStateOf(viewModel.hasLocationPermission())
     }
     var askedNotificationPermission by rememberSaveable { mutableStateOf(false) }
-    var askedLocationPermission by rememberSaveable { mutableStateOf(false) }
     // Manual check from Settings shows up-to-date / error dialogs; silent auto-check does not.
     var updateStatusDialogs by rememberSaveable { mutableStateOf(false) }
 
@@ -216,6 +216,12 @@ fun TyphoonApp(
         }
     }
 
+    // TYP-58: the ONLY entry point for the system location prompt. It must stay
+    // user-initiated (Settings toggle / "grant" button / upgrade notice "Turn on");
+    // never call it from a cold-start or settings-observing effect.
+    // TYP-37 hook: once the first-launch disclaimer is approved, gate this function on it
+    // (show the disclaimer and continue here only after it is acknowledged), so the
+    // disclaimer always precedes any location prompt.
     fun requestLocationPermission(thenRequestNotification: Boolean = false) {
         if (viewModel.hasLocationPermission()) {
             locationGranted = true
@@ -251,35 +257,28 @@ fun TyphoonApp(
         }
     }
 
-    // Cold start: always request location first (distance / map / local alerts),
-    // then notification if needed. Never launch two system dialogs at once.
+    // Cold start (TYP-58): never prompt for location. Only refresh a fix when the user
+    // has opted in and permission is already granted; still ask for notifications.
+    // TYP-37 hook: the first-launch disclaimer dialog will be shown here, before anything
+    // else on first run; it must come before any location prompt.
     LaunchedEffect(Unit) {
         notificationsGranted = viewModel.canPostLiveNotifications()
         locationGranted = viewModel.hasLocationPermission()
 
+        if (locationGranted) {
+            // No-op unless location alerts are on (checked against the stored value).
+            viewModel.refreshUserLocation()
+        }
+
         val needNotification =
             (settings.liveActivityEnabled || settings.emergencyAlertsEnabled) &&
                 !notificationsGranted
-
-        if (!locationGranted && !askedLocationPermission) {
-            askedLocationPermission = true
-            if (needNotification && !askedNotificationPermission) {
-                askedNotificationPermission = true
-                requestLocationPermission(thenRequestNotification = true)
-            } else {
-                requestLocationPermission(thenRequestNotification = false)
-            }
-        } else {
-            if (locationGranted) {
-                viewModel.refreshUserLocation(force = true)
-            }
-            if (needNotification && !askedNotificationPermission) {
-                askedNotificationPermission = true
-                requestNotificationPermission()
-            } else if (notificationsGranted) {
-                viewModel.refreshLiveActivity()
-                TyphoonLiveUpdateWorker.schedule(context.applicationContext)
-            }
+        if (needNotification && !askedNotificationPermission) {
+            askedNotificationPermission = true
+            requestNotificationPermission()
+        } else if (notificationsGranted) {
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
         }
     }
 
@@ -297,18 +296,25 @@ fun TyphoonApp(
         }
     }
 
-    // If location permission was revoked while app is open, or user enables alerts.
+    // Keep permission state fresh and refresh the fix when alerts are on. Does NOT
+    // request permission (TYP-58): the toggle's onLocationAlertsChange does that.
     LaunchedEffect(settings.locationAlertsEnabled) {
         locationGranted = viewModel.hasLocationPermission()
-        if (locationGranted) {
-            viewModel.refreshUserLocation(force = true)
-            return@LaunchedEffect
+        if (locationGranted && settings.locationAlertsEnabled) {
+            viewModel.refreshUserLocation()
         }
-        // Cold-start handles the first ask; only re-ask when user toggles location alerts on.
-        if (settings.locationAlertsEnabled && !askedLocationPermission) {
-            askedLocationPermission = true
-            requestLocationPermission(thenRequestNotification = false)
-        }
+    }
+
+    // TYP-58: one-time notice for upgraders from 1.3.1 and earlier (never fresh installs).
+    val showLocationOptInNotice by viewModel.showLocationOptInNotice.collectAsStateWithLifecycle()
+    if (showLocationOptInNotice) {
+        LocationOptInNoticeDialog(
+            onTurnOn = {
+                viewModel.acceptLocationOptInNotice()
+                requestLocationPermission()
+            },
+            onDismiss = viewModel::dismissLocationOptInNotice
+        )
     }
 
     AppUpdateHost(
