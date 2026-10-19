@@ -298,4 +298,9 @@
     <string name="demo_bavi_name">巴威</string>
     <string name="demo_mekkhala_name">米克拉</string>
     <string name="demo_hagupit_name">哈格比</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">依定位推播改為需手動開啟</string>
+    <string name="location_opt_in_notice_body">%1$s 不再預設使用你的位置。依定位推播（距離提醒與你附近的官方預警）在你自行開啟前會維持關閉，之後也可以隨時在設定中變更。</string>
+    <string name="location_opt_in_notice_turn_on">去開啟</string>
+    <string name="location_opt_in_notice_dismiss">暫不</string>
 </resources>

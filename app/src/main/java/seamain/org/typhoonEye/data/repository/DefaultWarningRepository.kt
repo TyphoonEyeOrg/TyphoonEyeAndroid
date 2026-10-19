@@ -2,6 +2,7 @@ package seamain.org.typhoonEye.data.repository
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -268,7 +269,12 @@ class DefaultWarningRepository @Inject constructor(
             Triple(35.10, 129.04, "釜山")
         )
 
-        private fun buildWatchPoints(
+        /**
+         * QWeather watch points. The user's (2-decimal rounded) position is included only
+         * when [userLocation] is non-null, i.e. location alerts are on (TYP-58).
+         */
+        @VisibleForTesting
+        internal fun buildWatchPoints(
             activeTyphoons: List<Typhoon>,
             userLocation: UserLocation?
         ): List<Triple<Double, Double, String>> {

@@ -302,4 +302,9 @@
     <string name="demo_bavi_name">Bavi</string>
     <string name="demo_mekkhala_name">Mekkhala</string>
     <string name="demo_hagupit_name">Hagupit</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">Location-based alerts are now opt-in</string>
+    <string name="location_opt_in_notice_body">%1$s no longer uses your location by default. Location-based alerts (distance alerts and official warnings near you) stay off until you turn them on yourself. You can change this any time in Settings.</string>
+    <string name="location_opt_in_notice_turn_on">Turn on</string>
+    <string name="location_opt_in_notice_dismiss">Not now</string>
 </resources>
