@@ -5,6 +5,7 @@
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![F-Droid](https://img.shields.io/badge/F--Droid-metadata-1976D2.svg?style=flat)](metadata/seamain.org.typhoonEye.yml)
+[![F-Droid](https://img.shields.io/f-droid/v/seamain.org.typhoonEye.svg?logo=fdroid)](https://f-droid.org/packages/seamain.org.typhoonEye/)
 
 [English](README.md) | 中文
 
