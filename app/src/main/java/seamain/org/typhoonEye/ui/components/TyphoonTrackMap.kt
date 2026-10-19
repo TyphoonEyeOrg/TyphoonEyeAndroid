@@ -79,7 +79,10 @@ import seamain.org.typhoonEye.ui.util.windCircleRing
 import seamain.org.typhoonEye.ui.util.windRadii10
 import seamain.org.typhoonEye.ui.util.windRadii12
 import seamain.org.typhoonEye.ui.util.windRadii7
-import seamain.org.typhoonEye.ui.util.windRadiusPaddingDegrees
+import seamain.org.typhoonEye.ui.util.CameraFit
+import seamain.org.typhoonEye.ui.util.GeoPoint
+import seamain.org.typhoonEye.ui.util.computeCameraFit
+import seamain.org.typhoonEye.ui.util.zoomForSpan
 
 private const val TAG = "TyphoonTrackMap"
 private const val SOURCE_HISTORY = "ty-history-line"
@@ -697,69 +700,41 @@ private fun fitCamera(
     userLocation: UserLocation? = null,
     useGcj02: Boolean = false
 ) {
-    val points = history + forecast
-    if (points.isEmpty() && userLocation?.isValid != true) return
-    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
-    val user = userLocation?.takeIf { it.isValid }
-
-    if (valid.isEmpty() && user == null) return
-
-    fun ptLatLng(lng: Double, lat: Double): LatLng {
+    fun geo(lng: Double, lat: Double): GeoPoint {
         val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
-        return LatLng(mLat, mLng)
+        return GeoPoint(mLat, mLng)
     }
 
-    val mapped = valid.map { ptLatLng(it.lng, it.lat) }
-    val userLl = user?.let { ptLatLng(it.longitude, it.latitude) }
+    val track = (history + forecast)
+        .filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+        .map { geo(it.lng, it.lat) }
+    val currentPoint = history.lastOrNull()
+        ?.takeIf { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+    val current = currentPoint?.let { geo(it.lng, it.lat) }
+    val windRadiusKm = currentPoint?.let { p ->
+        listOfNotNull(p.windRadii7()?.maxKm, p.windRadii10()?.maxKm, p.windRadii12()?.maxKm)
+            .maxOrNull()
+    } ?: 0.0
+    val user = userLocation?.takeIf { it.isValid }?.let { geo(it.longitude, it.latitude) }
 
-    var minLat = mapped.minOfOrNull { it.latitude } ?: userLl!!.latitude
-    var maxLat = mapped.maxOfOrNull { it.latitude } ?: userLl!!.latitude
-    var minLng = mapped.minOfOrNull { it.longitude } ?: userLl!!.longitude
-    var maxLng = mapped.maxOfOrNull { it.longitude } ?: userLl!!.longitude
-
-    if (userLl != null) {
-        minLat = minOf(minLat, userLl.latitude)
-        maxLat = maxOf(maxLat, userLl.latitude)
-        minLng = minOf(minLng, userLl.longitude)
-        maxLng = maxOf(maxLng, userLl.longitude)
-    }
-
-    history.lastOrNull()?.let { current ->
-        val maxR = listOfNotNull(
-            current.windRadii7()?.maxKm,
-            current.windRadii10()?.maxKm,
-            current.windRadii12()?.maxKm
-        ).maxOrNull() ?: 0.0
-        if (maxR > 0.0) {
-            val center = ptLatLng(current.lng, current.lat)
-            val (latPad, lngPad) = windRadiusPaddingDegrees(center.latitude, maxR)
-            minLat = minOf(minLat, center.latitude - latPad)
-            maxLat = maxOf(maxLat, center.latitude + latPad)
-            minLng = minOf(minLng, center.longitude - lngPad)
-            maxLng = maxOf(maxLng, center.longitude + lngPad)
+    // #14 / TYP-55: shortest-arc fit across the antimeridian; see CameraBounds.kt.
+    when (val fit = computeCameraFit(track, current, windRadiusKm, user) ?: return) {
+        is CameraFit.Center ->
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fit.lat, fit.lng), fit.zoom))
+        is CameraFit.Bounds -> runCatching {
+            // LatLngBounds.from() keeps the unwrapped east (> 180 allowed, west <= east
+            // required); the native camera fit projects it linearly, so the box stays on
+            // the short side of 180°. Builder would also work, but from() is explicit.
+            val bounds = LatLngBounds.from(fit.north, fit.east, fit.south, fit.west)
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 72))
+        }.onFailure {
+            map.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(fit.centerLat, fit.centerLng),
+                    zoomForSpan(fit.lngSpan, fit.latSpan)
+                )
+            )
         }
-    }
-
-    if (mapped.size <= 1 && userLl == null && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
-        val p = mapped.firstOrNull() ?: return
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(p, 5.5))
-        return
-    }
-
-    val latSpan = (maxLat - minLat).coerceAtLeast(0.3)
-    val lngSpan = (maxLng - minLng).coerceAtLeast(0.3)
-    val midLat = (minLat + maxLat) / 2.0
-    val midLng = (minLng + maxLng) / 2.0
-
-    runCatching {
-        val builder = LatLngBounds.Builder()
-        builder.include(LatLng(midLat - latSpan / 2, midLng - lngSpan / 2))
-        builder.include(LatLng(midLat + latSpan / 2, midLng + lngSpan / 2))
-        mapped.forEach { builder.include(it) }
-        if (userLl != null) builder.include(userLl)
-        map.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 72))
-    }.onFailure {
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 4.5))
     }
 }
 
