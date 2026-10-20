@@ -24,7 +24,7 @@ import type { Source } from "./routes";
  * next flush (not before FLUSH_INTERVAL_MS), and kv.ts logs one line.
  */
 
-export const DEFAULT_DAILY_BUDGET: Record<Source, number> = { juhe: 400, qweather: 4000 };
+export const DEFAULT_DAILY_BUDGET: Record<Source, number> = { juhe: 40, qweather: 4000 };
 export const FLUSH_EVERY_CALLS = 20;
 export const FLUSH_INTERVAL_MS = 5 * 60 * 1000;
 export const REFRESH_INTERVAL_MS = 60 * 1000;

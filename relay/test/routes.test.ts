@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheKey, DETAIL_TTL_SECONDS, LIST_TTL_SECONDS, matchRoute, RouteError, type UpstreamRoute } from "../src/routes";
+import { cacheKey, DETAIL_TTL_SECONDS, JUHE_TTL_SECONDS, LIST_TTL_SECONDS, matchRoute, RouteError, type UpstreamRoute } from "../src/routes";
 
 const NOW = Date.UTC(2026, 9, 8);
 const route = (path: string) => matchRoute(new URL(`https://te-relay.seamain.org${path}`), NOW);
@@ -19,8 +19,8 @@ function expectError(path: string, status: number, code: string) {
 describe("path allowlist", () => {
   it("maps exactly the six provider calls the app makes, with TYP-51 TTLs", () => {
     const cases: [string, string, number][] = [
-      ["/v1/juhe/fapigw/typhoon/active", "v1:juhe:fapigw/typhoon/active", LIST_TTL_SECONDS],
-      ["/v1/juhe/fapigw/typhoon/detail?tfid=202609", "v1:juhe:fapigw/typhoon/detail?tfid=202609", DETAIL_TTL_SECONDS],
+      ["/v1/juhe/fapigw/typhoon/active", "v1:juhe:fapigw/typhoon/active", JUHE_TTL_SECONDS],
+      ["/v1/juhe/fapigw/typhoon/detail?tfid=202609", "v1:juhe:fapigw/typhoon/detail?tfid=202609", JUHE_TTL_SECONDS],
       ["/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026", "v1:qweather:v7/tropical/storm-list?basin=NP&year=2026", LIST_TTL_SECONDS],
       ["/v1/qweather/v7/tropical/storm-track?stormid=NP_2609", "v1:qweather:v7/tropical/storm-track?stormid=NP_2609", DETAIL_TTL_SECONDS],
       ["/v1/qweather/v7/tropical/storm-forecast?stormid=NP_2609", "v1:qweather:v7/tropical/storm-forecast?stormid=NP_2609", DETAIL_TTL_SECONDS],
@@ -33,6 +33,7 @@ describe("path allowlist", () => {
     }
     expect(LIST_TTL_SECONDS).toBe(600);
     expect(DETAIL_TTL_SECONDS).toBe(1800);
+    expect(JUHE_TTL_SECONDS).toBe(3600);
     expect(route("/v1/alerts").kind).toBe("alerts");
     expect(route("/v1/health").kind).toBe("health");
   });

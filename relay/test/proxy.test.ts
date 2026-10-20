@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { Budgets } from "../src/budget";
 import { clientKey, handleFetch } from "../src/index";
-import { cachedKeys, clientRequest, FakeCache, FakeLimiter, FakeUpstream, json, JUHE_OK_EMPTY, makeDeps, makeEnv, QW_LIST, QW_OK, qwListKey, SECRETS, seedList } from "./helpers";
+import { cachedJson } from "../src/proxy";
+import { juheListRoute } from "../src/routes";
+import { cachedKeys, clientRequest, FakeCache, FakeLimiter, FakeUpstream, json, JUHE_LIST, JUHE_OK_EMPTY, makeDeps, makeEnv, QW_LIST, QW_OK, qwListKey, SECRETS, seedList } from "./helpers";
 
 const T0 = Date.UTC(2026, 9, 8, 1, 0, 0);
 
@@ -12,7 +15,7 @@ describe("forwarding", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=600");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
     const sent = new URL(upstream.requests[0].url);
     expect(`${sent.origin}${sent.pathname}`).toBe("https://apis.juhe.cn/fapigw/typhoon/active");
     expect(sent.searchParams.get("key")).toBe(SECRETS.JUHE_KEY);
@@ -92,7 +95,7 @@ describe("caching", () => {
     const fromKv = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, clock, null));
 
     expect(upstream.requests).toHaveLength(1);
-    expect(fromKv.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(fromKv.headers.get("Cache-Control")).toBe("public, max-age=3060");
   });
 
   it("refetches a list after 10 minutes and a detail after 30", async () => {
@@ -114,13 +117,56 @@ describe("caching", () => {
     expect(upstream.requests).toHaveLength(4);
   });
 
-  it("does not store provider errors in KV, caches them briefly at the edge", async () => {
-    const upstream = new FakeUpstream(() => json({ reason: "超过每日可允许请求次数", error_code: 10012 }));
+  it("never caches a Juhe 10012 (quota) answer: 503 no-store, no KV or edge write", async () => {
+    let quota = true;
+    const upstream = new FakeUpstream(() => (quota ? json({ resultcode: "112", reason: "超过每日可允许请求次数", error_code: 10012 }) : json(JUHE_OK_EMPTY)));
     const env = makeEnv();
-    const res = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, { now: T0 }));
+    const cache = new FakeCache();
+    const res = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, { now: T0 }, cache));
 
-    expect(res.status).toBe(200);
-    expect((await res.json()).error_code).toBe(10012);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "upstream_error", code: 10012 });
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(cachedKeys(env.RELAY_KV)).toEqual([]);
+    expect([...cache.store.keys()].filter((k) => !k.includes("guard"))).toEqual([]);
+
+    // Quota back: the next request reaches Juhe again and the success is cached.
+    quota = false;
+    const ok = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/active"), env, makeDeps(upstream, { now: T0 + 1000 }, cache));
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("Cache-Control")).toBe("public, max-age=3600");
+    expect(upstream.requests).toHaveLength(2);
+    expect(cachedKeys(env.RELAY_KV)).toEqual(["v1:juhe:fapigw/typhoon/active"]);
+    expect(cache.store.size).toBeGreaterThan(0);
+  });
+
+  it("never caches a Juhe error on the detail route either", async () => {
+    const upstream = new FakeUpstream((r) => (r.url.includes("/detail") ? json({ resultcode: "112", reason: "quota", error_code: 10012 }) : json(JUHE_LIST)));
+    const env = makeEnv();
+    const cache = new FakeCache();
+    const res = await handleFetch(clientRequest("/v1/juhe/fapigw/typhoon/detail?tfid=202609"), env, makeDeps(upstream, { now: T0 }, cache));
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "upstream_error", code: 10012 });
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(cachedKeys(env.RELAY_KV)).not.toContain("v1:juhe:fapigw/typhoon/detail?tfid=202609");
+    expect([...cache.store.keys()].some((k) => k.includes(encodeURIComponent("detail?tfid=202609")))).toBe(false);
+  });
+
+  it("cron path (cachedJson) does not store a Juhe error and returns null", async () => {
+    const upstream = new FakeUpstream(() => json({ resultcode: "112", reason: "quota", error_code: 10012 }));
+    const env = makeEnv();
+    const cache = new FakeCache();
+    const deps = makeDeps(upstream, { now: T0 }, cache);
+    expect(await cachedJson(juheListRoute(), env, deps, new Budgets(env, T0))).toBeNull();
+    expect(cachedKeys(env.RELAY_KV)).toEqual([]);
+    expect(cache.store.size).toBe(0);
+  });
+
+  it("still briefly edge-caches non-Juhe provider errors without KV", async () => {
+    const upstream = new FakeUpstream(() => json({ code: "401" }, 200));
+    const env = makeEnv();
+    const res = await handleFetch(clientRequest("/v1/qweather/v7/tropical/storm-list?basin=NP&year=2026"), env, makeDeps(upstream, { now: T0 }));
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
     expect(cachedKeys(env.RELAY_KV)).toEqual([]);
   });
