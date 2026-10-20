@@ -31,6 +31,22 @@ async function overBudget(route: UpstreamRoute, env: Env, deps: Deps, nowMs: num
   return response;
 }
 
+/** Juhe `error_code` when present and not 0, else null. */
+export function juheErrorCode(body: string): number | string | null {
+  try {
+    const code = (JSON.parse(body) as Record<string, unknown> | null)?.error_code;
+    if (code === undefined || code === null || code === 0 || code === "0") return null;
+    return typeof code === "number" || typeof code === "string" ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 503 for a provider-level error; never cached anywhere. */
+export function upstreamErrorResponse(code: number | string): Response {
+  return jsonResponse(JSON.stringify({ error: "upstream_error", code }), 503, 0);
+}
+
 async function fromProvider(route: UpstreamRoute, env: Env, deps: Deps, budget: UpstreamBudget, nowMs: number): Promise<Response> {
   const key = cacheKey(route);
   const known = await checkKnown(route, env, deps, budget);
@@ -50,6 +66,11 @@ async function fromProvider(route: UpstreamRoute, env: Env, deps: Deps, budget: 
   }
   if (result.ok) return jsonResponse(result.body, 200, route.ttlSeconds);
 
+  // Juhe reports quota / key / parameter errors as HTTP 200 with a non-zero error_code.
+  // Never cache those (edge or KV): answer 503 no-store so the app falls back to QWeather.
+  const juheCode = route.source === "juhe" ? juheErrorCode(result.body) : null;
+  if (juheCode !== null) return upstreamErrorResponse(juheCode);
+
   // Provider said no (bad id, quota, auth…): pass its answer through unchanged, briefly cached.
   // 5xx from the provider becomes 502 so it is clearly not the relay's own failure.
   const status = result.status >= 500 ? 502 : result.status;
@@ -60,7 +81,8 @@ async function fromProvider(route: UpstreamRoute, env: Env, deps: Deps, budget: 
 
 /**
  * Edge cache (per location) → KV (global) → provider. Only successful provider answers are
- * stored in KV; error answers are kept in the edge cache for [ERROR_CACHE_SECONDS].
+ * stored in KV; Juhe error_code != 0 answers are not cached at all (503 no-store); other
+ * error answers are kept in the edge cache for [ERROR_CACHE_SECONDS].
  * A provider call needs a known storm id (guard.ts) and room in the daily budget (budget.ts).
  * [clientKey] is a salted hash of the client IP, used only for the upstream rate limit.
  */
