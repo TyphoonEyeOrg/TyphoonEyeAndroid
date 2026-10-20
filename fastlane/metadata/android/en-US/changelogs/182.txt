@@ -1,0 +1,5 @@
+- Typhoon names follow the app language; Traditional Chinese and Cantonese now use the official CWA and HKO name lists
+- Fixed tracks drawn wrongly when crossing 180°
+- Fixed the default template app icon
+- No location permission prompt at startup; location stays on the device
+Unofficial app. In an emergency, follow your local authority's warnings.
