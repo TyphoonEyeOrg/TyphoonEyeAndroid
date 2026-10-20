@@ -52,7 +52,9 @@ enum class NameColumn { English, ZhHans, ZhHantTW, ZhHK }
  * Key: English name (Juhe `enname`), trimmed, case-insensitive, hyphens/spaces ignored.
  * QWeather has no English name, so its Chinese name is reverse-matched against zhHans;
  * a zhHans string matching more than one English entry is ambiguous and treated as not found.
- * Fallbacks (never blank): table → API name for the language → raw Chinese → English.
+ * [localize] fallbacks: table → API name for the language → raw Chinese → English.
+ * Returns "" only when both inputs are blank; the final fallback to the storm id/number
+ * ("低压 <id>") happens in the caller, [seamain.org.typhoonEye.ui.util.displayName].
  */
 class StormNameIndex(val file: StormNameFile) {
     private fun key(s: String): String = s.trim().lowercase().filter { it.isLetterOrDigit() }
