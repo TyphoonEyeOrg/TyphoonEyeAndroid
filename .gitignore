@@ -12,7 +12,7 @@ bin/
 gen/
 out/
 release/
-# ...but not the release build-type source set (app/src/release, TYP-55 debug-demo stub)
+# except app/src/release (TYP-55 debug-demo stub)
 !/app/src/release/
 
 # Gradle
