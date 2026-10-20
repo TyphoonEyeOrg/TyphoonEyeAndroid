@@ -1,6 +1,7 @@
 package seamain.org.typhoonEye.data.repository
 
 import android.content.Context
+import seamain.org.typhoonEye.ui.util.displayName
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -145,7 +146,7 @@ class DefaultWarningRepository @Inject constructor(
                 id = "intensity-${typhoon.id}-${level.name}",
                 title = appContext.getString(
                     R.string.intensity_alert_title,
-                    typhoon.name,
+                    typhoon.displayName(appContext),
                     intensityLabel
                 ),
                 body = buildString {
