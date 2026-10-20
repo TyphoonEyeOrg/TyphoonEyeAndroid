@@ -126,6 +126,7 @@ object StormNames {
     /**
      * Name column when following the system locale. Only picks the name list; UI language
      * resolution ([AppLanguage.fromLocaleTags]) is unchanged.
+     * Script first: zh-Hans-* (incl. zh-Hans-HK/MO) → zhHans. Then region for Traditional/yue:
      * zh-HK / zh-MO / zh-Hant-HK / zh-Hant-MO / yue → HKO; zh-TW / zh-Hant-TW / zh-Hant → CWA.
      */
     fun columnForLocaleTag(tag: String?): NameColumn {
@@ -135,12 +136,23 @@ object StormNames {
         val script = locale.script.lowercase()
         return when {
             lang == "yue" -> NameColumn.ZhHK
+            // Script decides first: any zh-Hans-* is Simplified, whatever the region.
+            lang == "zh" && script == "hans" -> NameColumn.ZhHans
             lang == "zh" && (region == "HK" || region == "MO") -> NameColumn.ZhHK
             lang == "zh" && (region == "TW" || script == "hant") -> NameColumn.ZhHantTW
             lang == "zh" -> NameColumn.ZhHans
             else -> columnFor(AppLanguage.resolveSupported(tag).takeIf { it != AppLanguage.System } ?: AppLanguage.English)
         }
     }
+
+    /**
+     * Column for background work (worker, notifications, alert titles): driven by the app's
+     * saved language preference, not the Context locale. [AppLanguage.System] → [systemTag].
+     */
+    fun columnForPreference(
+        preference: AppLanguage,
+        systemTag: String = (LocaleListCompat.getAdjustedDefault().get(0) ?: Locale.getDefault()).toLanguageTag(),
+    ): NameColumn = if (preference == AppLanguage.System) columnForLocaleTag(systemTag) else columnFor(preference)
 
     /** Column for the app right now: explicit per-app language, else the device locale. */
     fun currentColumn(): NameColumn {

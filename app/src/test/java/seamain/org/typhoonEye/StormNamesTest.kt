@@ -167,7 +167,7 @@ class StormNamesTest {
             "zh-HK" to NameColumn.ZhHK, "zh-MO" to NameColumn.ZhHK, "yue" to NameColumn.ZhHK,
             "zh-Hant-TW" to NameColumn.ZhHantTW, "zh-Hant" to NameColumn.ZhHantTW,
             "zh-TW" to NameColumn.ZhHantTW, "zh-CN" to NameColumn.ZhHans,
-            "zh-Hans-HK" to NameColumn.ZhHK, "zh" to NameColumn.ZhHans,
+            "zh-Hans-HK" to NameColumn.ZhHans, "zh-Hans-MO" to NameColumn.ZhHans, "zh-Hans-CN" to NameColumn.ZhHans, "zh" to NameColumn.ZhHans,
             "en-US" to NameColumn.English, "de-DE" to NameColumn.English,
         ).forEach { (tag, col) -> assertEquals(tag, col, StormNames.columnForLocaleTag(tag)) }
         assertEquals("夏浪", juhe("夏浪", "HALONG").localizedName(StormNames.columnForLocaleTag("zh-Hant-HK")))
@@ -191,5 +191,12 @@ class StormNamesTest {
     @Test fun bare_zh_hant_uses_cwa_column() {
         assertEquals(NameColumn.ZhHantTW, StormNames.columnForLocaleTag("zh-Hant"))
         assertEquals("米塔", StormNames.localize("Mitag", "米娜", StormNames.columnForLocaleTag("zh-Hant")))
+    }
+
+    @Test fun simplified_script_wins_over_hk_mo_region() {
+        assertEquals(NameColumn.ZhHans, StormNames.columnForLocaleTag("zh-Hans-HK"))
+        assertEquals(NameColumn.ZhHans, StormNames.columnForLocaleTag("zh-Hans-MO"))
+        assertEquals(NameColumn.ZhHK, StormNames.columnForLocaleTag("zh-HK"))
+        assertEquals("米娜", StormNames.localize("Mitag", "", StormNames.columnForLocaleTag("zh-Hans-HK")))
     }
 }
