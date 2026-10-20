@@ -298,4 +298,9 @@
     <string name="demo_bavi_name">巴威</string>
     <string name="demo_mekkhala_name">米克拉</string>
     <string name="demo_hagupit_name">黑格比</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">按定位推送要自己開返</string>
+    <string name="location_opt_in_notice_body">%1$s 而家唔會預設用你嘅位置。按定位推送（距離提醒同你附近嘅官方預警）喺你自己開返之前會一直熄咗，之後都可以隨時喺設定度改。</string>
+    <string name="location_opt_in_notice_turn_on">去開啟</string>
+    <string name="location_opt_in_notice_dismiss">遲啲先</string>
 </resources>

@@ -164,6 +164,10 @@ android {
                 ?: System.getenv("GITHUB_REPO")?.takeIf { it.isNotBlank() }
                 ?: "TyphoonEyeAndroid").asBuildConfigLiteral()
         )
+        // TYP-58: default for "location-based alerts" when the user never touched the toggle.
+        // true here (F-Droid relay build: the position never leaves the device);
+        // the github flavor overrides it to false because it sends coordinates to QWeather.
+        buildConfigField("boolean", "LOCATION_ALERTS_DEFAULT", "true")
         }
 
     // github (default) keeps R.bool.enable_in_app_updates=true from main.
@@ -197,6 +201,8 @@ android {
                     ?: "https://devapi.qweather.com/").asBuildConfigLiteral()
             )
             buildConfigField("String", "RELAY_BASE_URL", "\"\"")
+            // TYP-58: this build sends lat/lng to QWeather, so location alerts are opt-in.
+            buildConfigField("boolean", "LOCATION_ALERTS_DEFAULT", "false")
         }
         create("fdroid") {
             dimension = "distribution"

@@ -302,4 +302,9 @@
     <string name="demo_bavi_name">巴威</string>
     <string name="demo_mekkhala_name">美莎克</string>
     <string name="demo_hagupit_name">黑格比</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">基于定位推送需要手动开启</string>
+    <string name="location_opt_in_notice_body">%1$s 不再默认使用你的位置。基于定位推送（距离提醒和你附近的官方预警）在你手动开启前保持关闭，之后也可以随时在设置里更改。</string>
+    <string name="location_opt_in_notice_turn_on">去开启</string>
+    <string name="location_opt_in_notice_dismiss">暂不</string>
 </resources>
