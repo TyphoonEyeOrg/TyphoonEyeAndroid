@@ -1,0 +1,2653 @@
+{
+ "schemaVersion": 1,
+ "listVersion": "2026",
+ "effectiveDate": "2026-06-08",
+ "retrievedDate": "2026-10-20",
+ "description": "ESCAP/WMO Typhoon Committee western North Pacific names. Shared by Android and iOS. Strings copied verbatim from the official lists; never transliterate or convert Simplified->Traditional. null = not sourced (unverified).",
+ "sources": {
+  "hko": {
+   "name": "Hong Kong Observatory",
+   "columns": [
+    "en",
+    "zhHK"
+   ],
+   "urls": [
+    "https://www.hko.gov.hk/en/informtc/sound/tcname2026e.html",
+    "https://www.hko.gov.hk/tc/informtc/sound/tcname2026e.html",
+    "https://www.weather.gov.hk/en/publica/gen_pub/files/tcnames_2026.pdf"
+   ]
+  },
+  "nmc": {
+   "name": "China Meteorological Administration / National Meteorological Center",
+   "columns": [
+    "zhHans",
+    "retired"
+   ],
+   "urls": [
+    "https://www.nmc.cn/publish/typhoon/typhoon-name/index.html"
+   ]
+  },
+  "cwa": {
+   "name": "Central Weather Administration (交通部中央氣象署), 表 2-1 (2026 年 6 月更新)",
+   "columns": [
+    "zhHantTW"
+   ],
+   "urls": [
+    "https://www.cwa.gov.tw/V8/C/K/Encyclopedia/typhoon/typhoon.pdf"
+   ]
+  },
+  "jma": {
+   "name": "JMA RSMC Tokyo (English spelling cross-check)",
+   "columns": [],
+   "urls": [
+    "https://www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/tyname.html"
+   ]
+  }
+ },
+ "entries": [
+  {
+   "en": "Damrey",
+   "zhHans": "达维",
+   "zhHantTW": "丹瑞",
+   "zhHK": "達維",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tianma",
+   "zhHans": "天马",
+   "zhHantTW": "天馬",
+   "zhHK": "天馬",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Kirogi",
+   "zhHans": "鸿雁",
+   "zhHantTW": "鴻雁",
+   "zhHK": "鴻雁",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Yun-yeung",
+   "zhHans": "鸳鸯",
+   "zhHantTW": "鴛鴦",
+   "zhHK": "鴛鴦",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Koinu",
+   "zhHans": "小犬",
+   "zhHantTW": "小犬",
+   "zhHK": "小犬",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bolaven",
+   "zhHans": "布拉万",
+   "zhHantTW": "布拉萬",
+   "zhHK": "布拉萬",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sanba",
+   "zhHans": "三巴",
+   "zhHantTW": "三巴",
+   "zhHK": "三巴",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Jelawat",
+   "zhHans": "杰拉华",
+   "zhHantTW": "鯉魚",
+   "zhHK": "杰拉華",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tirou",
+   "zhHans": "蒂鲁",
+   "zhHantTW": "蒂魯",
+   "zhHK": "蒂魯",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Maliksi",
+   "zhHans": "马力斯",
+   "zhHantTW": "馬力斯",
+   "zhHK": "馬力斯",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Gaemi",
+   "zhHans": "格美",
+   "zhHantTW": "凱米",
+   "zhHK": "格美",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Prapiroon",
+   "zhHans": "派比安",
+   "zhHantTW": "巴比侖",
+   "zhHK": "派比安",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Maria",
+   "zhHans": "玛莉亚",
+   "zhHantTW": "瑪莉亞",
+   "zhHK": "瑪莉亞",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Son-Tinh",
+   "zhHans": "山神",
+   "zhHantTW": "山神",
+   "zhHK": "山神",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Ampil",
+   "zhHans": "安比",
+   "zhHantTW": "安比",
+   "zhHK": "安比",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Wukong",
+   "zhHans": "悟空",
+   "zhHantTW": "悟空",
+   "zhHK": "悟空",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Jongdari",
+   "zhHans": "云雀",
+   "zhHantTW": "雲雀",
+   "zhHK": "雲雀",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Shanshan",
+   "zhHans": "珊珊",
+   "zhHantTW": "珊珊",
+   "zhHK": "珊珊",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tomo",
+   "zhHans": "船尾",
+   "zhHantTW": "船尾",
+   "zhHK": "船尾",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Leepi",
+   "zhHans": "丽琵",
+   "zhHantTW": "麗琵",
+   "zhHK": "麗琵",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bebinca",
+   "zhHans": "贝碧嘉",
+   "zhHantTW": "貝碧佳",
+   "zhHK": "貝碧嘉",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Pulasan",
+   "zhHans": "普拉桑",
+   "zhHantTW": "葡萄桑",
+   "zhHK": "普拉桑",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Soulik",
+   "zhHans": "苏力",
+   "zhHantTW": "蘇力",
+   "zhHK": "蘇力",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Cimaron",
+   "zhHans": "西马仑",
+   "zhHantTW": "西馬隆",
+   "zhHK": "西馬侖",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Narae",
+   "zhHans": "娜尼",
+   "zhHantTW": "娜尼",
+   "zhHK": "娜尼",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Burapha",
+   "zhHans": "布拉帕",
+   "zhHantTW": "布拉帕",
+   "zhHK": "布拉帕",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Barijat",
+   "zhHans": "百里嘉",
+   "zhHantTW": "百里嘉",
+   "zhHK": "百里嘉",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Hoaban",
+   "zhHans": "花斑",
+   "zhHantTW": "花斑",
+   "zhHK": "花斑",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Koki",
+   "zhHans": "高基",
+   "zhHantTW": "高基",
+   "zhHK": "高基",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Yinxing",
+   "zhHans": "银杏",
+   "zhHantTW": "銀杏",
+   "zhHK": "銀杏",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Gaeguri",
+   "zhHans": "简古维",
+   "zhHantTW": "青蛙",
+   "zhHK": "簡古維",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Dim-sum",
+   "zhHans": "点心",
+   "zhHantTW": "點心",
+   "zhHK": "點心",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Hebi",
+   "zhHans": "希比",
+   "zhHantTW": "希比",
+   "zhHK": "希比",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Pabuk",
+   "zhHans": "帕布",
+   "zhHantTW": "帕布",
+   "zhHK": "帕布",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Wutip",
+   "zhHans": "蝴蝶",
+   "zhHantTW": "蝴蝶",
+   "zhHK": "蝴蝶",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sepat",
+   "zhHans": "圣帕",
+   "zhHantTW": "聖帕",
+   "zhHK": "聖帕",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mun",
+   "zhHans": "木恩",
+   "zhHantTW": "木恩",
+   "zhHK": "木恩",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Danas",
+   "zhHans": "丹娜丝",
+   "zhHantTW": "丹娜絲",
+   "zhHK": "丹娜絲",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nari",
+   "zhHans": "百合",
+   "zhHantTW": "百合",
+   "zhHK": "百合",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Wipha",
+   "zhHans": "韦帕",
+   "zhHantTW": "薇帕",
+   "zhHK": "韋帕",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Francisco",
+   "zhHans": "范斯高",
+   "zhHantTW": "范斯高",
+   "zhHK": "范斯高",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Co-may",
+   "zhHans": "竹节草",
+   "zhHantTW": "竹節草",
+   "zhHK": "竹節草",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Krosa",
+   "zhHans": "罗莎",
+   "zhHantTW": "柯羅莎",
+   "zhHK": "羅莎",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bailu",
+   "zhHans": "白鹿",
+   "zhHantTW": "白鹿",
+   "zhHK": "白鹿",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Podul",
+   "zhHans": "杨柳",
+   "zhHantTW": "楊柳",
+   "zhHK": "楊柳",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Lingling",
+   "zhHans": "玲玲",
+   "zhHantTW": "玲玲",
+   "zhHK": "玲玲",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Kajiki",
+   "zhHans": "剑鱼",
+   "zhHantTW": "劍魚",
+   "zhHK": "劍魚",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nongfa",
+   "zhHans": "蓝湖",
+   "zhHantTW": "藍湖",
+   "zhHK": "藍湖",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Peipah",
+   "zhHans": "琵琶",
+   "zhHantTW": "琵琶",
+   "zhHK": "琵琶",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tapah",
+   "zhHans": "塔巴",
+   "zhHantTW": "塔巴",
+   "zhHK": "塔巴",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mitag",
+   "zhHans": "米娜",
+   "zhHantTW": "米塔",
+   "zhHK": "米娜",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Ragasa",
+   "zhHans": "桦加沙",
+   "zhHantTW": "樺加沙",
+   "zhHK": "樺加沙",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Neoguri",
+   "zhHans": "浣熊",
+   "zhHantTW": "浣熊",
+   "zhHK": "浣熊",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bualoi",
+   "zhHans": "博罗依",
+   "zhHantTW": "博羅依",
+   "zhHK": "博羅依",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Matmo",
+   "zhHans": "麦德姆",
+   "zhHantTW": "麥德姆",
+   "zhHK": "麥德姆",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Halong",
+   "zhHans": "夏浪",
+   "zhHantTW": "哈隆",
+   "zhHK": "夏浪",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nakri",
+   "zhHans": "娜基莉",
+   "zhHantTW": "娜克莉",
+   "zhHK": "娜基莉",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Fengshen",
+   "zhHans": "风神",
+   "zhHantTW": "風神",
+   "zhHK": "風神",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Kalmaegi",
+   "zhHans": "海鸥",
+   "zhHantTW": "海鷗",
+   "zhHK": "海鷗",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Fung-wong",
+   "zhHans": "凤凰",
+   "zhHantTW": "鳳凰",
+   "zhHK": "鳳凰",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Koto",
+   "zhHans": "天琴",
+   "zhHantTW": "天琴",
+   "zhHK": "天琴",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nokaen",
+   "zhHans": "洛鞍",
+   "zhHantTW": "洛鞍",
+   "zhHK": "洛鞍",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Penha",
+   "zhHans": "西望洋",
+   "zhHantTW": "西望洋",
+   "zhHK": "西望洋",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nuri",
+   "zhHans": "鹦鹉",
+   "zhHantTW": "鸚鵡",
+   "zhHK": "鸚鵡",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sinlaku",
+   "zhHans": "森拉克",
+   "zhHantTW": "辛樂克",
+   "zhHK": "森拉克",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Hagupit",
+   "zhHans": "黑格比",
+   "zhHantTW": "哈格比",
+   "zhHK": "黑格比",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Jangmi",
+   "zhHans": "蔷薇",
+   "zhHantTW": "薔蜜",
+   "zhHK": "薔薇",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mekkhala",
+   "zhHans": "米克拉",
+   "zhHantTW": "米克拉",
+   "zhHK": "米克拉",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Higos",
+   "zhHans": "海高斯",
+   "zhHantTW": "無花果",
+   "zhHK": "海高斯",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bavi",
+   "zhHans": "巴威",
+   "zhHantTW": "巴威",
+   "zhHK": "巴威",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Maysak",
+   "zhHans": "美莎克",
+   "zhHantTW": "梅莎",
+   "zhHK": "美莎克",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Haishen",
+   "zhHans": "海神",
+   "zhHantTW": "海神",
+   "zhHK": "海神",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Noul",
+   "zhHans": "红霞",
+   "zhHantTW": "紅霞",
+   "zhHK": "紅霞",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Dolphin",
+   "zhHans": "白海豚",
+   "zhHantTW": "白海豚",
+   "zhHK": "白海豚",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Kujira",
+   "zhHans": "鲸鱼",
+   "zhHantTW": "鯨魚",
+   "zhHK": "鯨魚",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Chan-hom",
+   "zhHans": "灿鸿",
+   "zhHantTW": "昌鴻",
+   "zhHK": "燦鴻",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Peilou",
+   "zhHans": "琵鹭",
+   "zhHantTW": "琵鷺",
+   "zhHK": "琵鷺",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nangka",
+   "zhHans": "浪卡",
+   "zhHantTW": "南卡",
+   "zhHK": "浪卡",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Saudel",
+   "zhHans": "沙德尔",
+   "zhHantTW": "沙德爾",
+   "zhHK": "沙德爾",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Narra",
+   "zhHans": "紫檀",
+   "zhHantTW": "紫檀",
+   "zhHK": "紫檀",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Gaenari",
+   "zhHans": "简拉维",
+   "zhHantTW": "簡拉維",
+   "zhHK": "簡拉維",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Atsani",
+   "zhHans": "艾莎尼",
+   "zhHantTW": "閃電",
+   "zhHK": "艾莎尼",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Etau",
+   "zhHans": "艾涛",
+   "zhHantTW": "艾陶",
+   "zhHK": "艾濤",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bang-lang",
+   "zhHans": "班朗",
+   "zhHantTW": "班朗",
+   "zhHK": "班朗",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Krovanh",
+   "zhHans": "科罗旺",
+   "zhHantTW": "科羅旺",
+   "zhHK": "科羅旺",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Dujuan",
+   "zhHans": "杜鹃",
+   "zhHantTW": "杜鵑",
+   "zhHK": "杜鵑",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Surigae",
+   "zhHans": "舒力基",
+   "zhHantTW": "舒力基",
+   "zhHK": "舒力基",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Choi-wan",
+   "zhHans": "彩云",
+   "zhHantTW": "彩雲",
+   "zhHK": "彩雲",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Koguma",
+   "zhHans": "小熊",
+   "zhHantTW": "小熊",
+   "zhHK": "小熊",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Champi",
+   "zhHans": "蔷琵",
+   "zhHantTW": "薔琵",
+   "zhHK": "薔琵",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "In-fa",
+   "zhHans": "烟花",
+   "zhHantTW": "煙花",
+   "zhHK": "煙花",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Cempaka",
+   "zhHans": "查帕卡",
+   "zhHantTW": "查帕卡",
+   "zhHK": "查帕卡",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nepartak",
+   "zhHans": "尼伯特",
+   "zhHantTW": "尼伯特",
+   "zhHK": "尼伯特",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Lupit",
+   "zhHans": "卢碧",
+   "zhHantTW": "盧碧",
+   "zhHK": "盧碧",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mirinae",
+   "zhHans": "银河",
+   "zhHantTW": "銀河",
+   "zhHK": "銀河",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nida",
+   "zhHans": "妮妲",
+   "zhHantTW": "妮妲",
+   "zhHK": "妮妲",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Omais",
+   "zhHans": "奥麦斯",
+   "zhHantTW": "奧麥斯",
+   "zhHK": "奧麥斯",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Luc-Binh",
+   "zhHans": "浮莲",
+   "zhHantTW": "布袋蓮",
+   "zhHK": "浮蓮",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Chanthu",
+   "zhHans": "灿都",
+   "zhHantTW": "璨樹",
+   "zhHK": "燦都",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Dianmu",
+   "zhHans": "电母",
+   "zhHantTW": "電母",
+   "zhHK": "電母",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mindulle",
+   "zhHans": "蒲公英",
+   "zhHantTW": "蒲公英",
+   "zhHK": "蒲公英",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Lionrock",
+   "zhHans": "狮子山",
+   "zhHantTW": "獅子山",
+   "zhHK": "獅子山",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tokei",
+   "zhHans": "道玑",
+   "zhHantTW": "時鐘",
+   "zhHK": "道璣",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Namtheun",
+   "zhHans": "南川",
+   "zhHantTW": "南修",
+   "zhHK": "南川",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Malou",
+   "zhHans": "玛瑙",
+   "zhHantTW": "瑪瑙",
+   "zhHK": "瑪瑙",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nyatoh",
+   "zhHans": "妮亚图",
+   "zhHantTW": "妮亞圖",
+   "zhHK": "妮亞圖",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sarbul",
+   "zhHans": "沙布尔",
+   "zhHantTW": "沙布爾",
+   "zhHK": "沙布爾",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Amuyao",
+   "zhHans": "阿穆丘",
+   "zhHantTW": "阿穆丘",
+   "zhHK": "阿穆丘",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Gosari",
+   "zhHans": "古莎莉",
+   "zhHantTW": "古莎莉",
+   "zhHK": "古莎莉",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Chaba",
+   "zhHans": "暹芭",
+   "zhHantTW": "芙蓉",
+   "zhHK": "暹芭",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Aere",
+   "zhHans": "艾利",
+   "zhHantTW": "艾利",
+   "zhHK": "艾利",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Songda",
+   "zhHans": "桑达",
+   "zhHantTW": "桑達",
+   "zhHK": "桑達",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Trases",
+   "zhHans": "翠丝",
+   "zhHantTW": "翠絲",
+   "zhHK": "翠絲",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mulan",
+   "zhHans": "木兰",
+   "zhHantTW": "木蘭",
+   "zhHK": "木蘭",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Meari",
+   "zhHans": "米雷",
+   "zhHantTW": "米雷",
+   "zhHK": "米雷",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tsing-ma",
+   "zhHans": "青马",
+   "zhHantTW": "青馬",
+   "zhHK": "青馬",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Tokage",
+   "zhHans": "蝎虎",
+   "zhHantTW": "蝎虎",
+   "zhHK": "蝎虎",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Ong-mang",
+   "zhHans": "坡鹿",
+   "zhHantTW": "坡鹿",
+   "zhHK": "坡鹿",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Muifa",
+   "zhHans": "梅花",
+   "zhHantTW": "梅花",
+   "zhHK": "梅花",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Merbok",
+   "zhHans": "苗柏",
+   "zhHantTW": "莫柏",
+   "zhHK": "苗柏",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nanmadol",
+   "zhHans": "南玛都",
+   "zhHantTW": "南瑪都",
+   "zhHK": "南瑪都",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Talas",
+   "zhHans": "塔拉斯",
+   "zhHantTW": "塔拉斯",
+   "zhHK": "塔拉斯",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Hodu",
+   "zhHans": "核桃",
+   "zhHantTW": "核桃",
+   "zhHK": "核桃",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Kulap",
+   "zhHans": "玫瑰",
+   "zhHantTW": "庫拉",
+   "zhHK": "玫瑰",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Roke",
+   "zhHans": "洛克",
+   "zhHantTW": "洛克",
+   "zhHK": "洛克",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sonca",
+   "zhHans": "桑卡",
+   "zhHantTW": "桑卡",
+   "zhHK": "桑卡",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Nesat",
+   "zhHans": "纳沙",
+   "zhHantTW": "尼莎",
+   "zhHK": "納沙",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Haitang",
+   "zhHans": "海棠",
+   "zhHantTW": "海棠",
+   "zhHK": "海棠",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Jamjari",
+   "zhHans": "蜻蜓",
+   "zhHantTW": "蜻蜓",
+   "zhHK": "蜻蜓",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Banyan",
+   "zhHans": "榕树",
+   "zhHantTW": "榕樹",
+   "zhHK": "榕樹",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Yamaneko",
+   "zhHans": "山猫",
+   "zhHantTW": "山貓",
+   "zhHK": "山貓",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Pakhar",
+   "zhHans": "帕卡",
+   "zhHantTW": "帕卡",
+   "zhHK": "帕卡",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Sanvu",
+   "zhHans": "珊瑚",
+   "zhHantTW": "珊瑚",
+   "zhHK": "珊瑚",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Mawar",
+   "zhHans": "玛娃",
+   "zhHantTW": "瑪娃",
+   "zhHK": "瑪娃",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Guchol",
+   "zhHans": "古超",
+   "zhHantTW": "谷超",
+   "zhHK": "古超",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Talim",
+   "zhHans": "泰利",
+   "zhHantTW": "泰利",
+   "zhHK": "泰利",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Bori",
+   "zhHans": "布里",
+   "zhHantTW": "大麥",
+   "zhHK": "布里",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Khanun",
+   "zhHans": "卡努",
+   "zhHantTW": "卡努",
+   "zhHK": "卡努",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Lan",
+   "zhHans": "兰恩",
+   "zhHantTW": "蘭恩",
+   "zhHK": "蘭恩",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Saobien",
+   "zhHans": "海星",
+   "zhHantTW": "海星",
+   "zhHK": "海星",
+   "retired": false,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": "cwa",
+    "zhHK": "hko"
+   }
+  },
+  {
+   "en": "Hanuman",
+   "zhHans": "翰文",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Sarika",
+   "zhHans": "莎莉嘉",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Kodo",
+   "zhHans": "库都",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Hato",
+   "zhHans": "天鸽",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Chataan",
+   "zhHans": "查特安",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Kai-tak",
+   "zhHans": "启德",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Imbudo",
+   "zhHans": "伊布都",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Tembin",
+   "zhHans": "天秤",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Rusa",
+   "zhHans": "鹿莎",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Mangkhut",
+   "zhHans": "山竹",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Vamei",
+   "zhHans": "画眉",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Rumbia",
+   "zhHans": "温比亚",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Maemi",
+   "zhHans": "鸣蝉",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Faxai",
+   "zhHans": "法茜",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Pongsona",
+   "zhHans": "凤仙",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Hagibis",
+   "zhHans": "海贝思",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Rananim",
+   "zhHans": "云娜",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Kammuri",
+   "zhHans": "北冕",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Sudal",
+   "zhHans": "苏特",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Lekima",
+   "zhHans": "利奇马",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Tingting",
+   "zhHans": "婷婷",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Phanfone",
+   "zhHans": "巴蓬",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Yanyan",
+   "zhHans": "欣欣",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Yutu",
+   "zhHans": "玉兔",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Longwang",
+   "zhHans": "龙王",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Goni",
+   "zhHans": "天鹅",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Matsa",
+   "zhHans": "麦莎",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Linfa",
+   "zhHans": "莲花",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Nabi",
+   "zhHans": "彩蝶",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Molave",
+   "zhHans": "莫拉菲",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Bilis",
+   "zhHans": "碧利斯",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Vamco",
+   "zhHans": "环高",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Chanchu",
+   "zhHans": "珍珠",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Vongfong",
+   "zhHans": "黄蜂",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Durian",
+   "zhHans": "榴莲",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Conson",
+   "zhHans": "康森",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Saomai",
+   "zhHans": "桑美",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Hinnamnor",
+   "zhHans": "轩岚诺",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Xangsane",
+   "zhHans": "象神",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Kompasu",
+   "zhHans": "圆规",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Ketsana",
+   "zhHans": "凯萨娜",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Ma-on",
+   "zhHans": "马鞍",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Morakot",
+   "zhHans": "莫拉克",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Malakas",
+   "zhHans": "马勒卡",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Parma",
+   "zhHans": "芭玛",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Megi",
+   "zhHans": "鲇鱼",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Fanapi",
+   "zhHans": "凡亚比",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Nalgae",
+   "zhHans": "尼格",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Washi",
+   "zhHans": "天鹰",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Noru",
+   "zhHans": "奥鹿",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Bopha",
+   "zhHans": "宝霞",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Rai",
+   "zhHans": "雷伊",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Fitow",
+   "zhHans": "菲特",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Doksuri",
+   "zhHans": "杜苏芮",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Haiyan",
+   "zhHans": "海燕",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Haikui",
+   "zhHans": "海葵",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Sonamu",
+   "zhHans": "清松",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Saola",
+   "zhHans": "苏拉",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Utor",
+   "zhHans": "尤特",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Ewiniar",
+   "zhHans": "艾云尼",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Vicente",
+   "zhHans": "韦森特",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Jebi",
+   "zhHans": "飞燕",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Rammasun",
+   "zhHans": "威马逊",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Kong-rey",
+   "zhHans": "康妮",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Koppu",
+   "zhHans": "巨爵",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Krathon",
+   "zhHans": "山陀儿",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Melor",
+   "zhHans": "茉莉",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Man-yi",
+   "zhHans": "万宜",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Mujigae",
+   "zhHans": "彩虹",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Toraji",
+   "zhHans": "桃芝",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Soudelor",
+   "zhHans": "苏迪罗",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Trami",
+   "zhHans": "潭美",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Haima",
+   "zhHans": "海马",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Usagi",
+   "zhHans": "天兔",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Meranti",
+   "zhHans": "莫兰蒂",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Yagi",
+   "zhHans": "摩羯",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  },
+  {
+   "en": "Nockten",
+   "zhHans": "洛坦",
+   "zhHantTW": null,
+   "zhHK": null,
+   "retired": true,
+   "sources": {
+    "zhHans": "nmc",
+    "zhHantTW": null,
+    "zhHK": null
+   }
+  }
+ ]
+}

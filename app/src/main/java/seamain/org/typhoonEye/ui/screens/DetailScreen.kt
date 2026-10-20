@@ -74,6 +74,7 @@ import seamain.org.typhoonEye.ui.components.TrackMapCard
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 import seamain.org.typhoonEye.ui.util.currentIntensity
+import seamain.org.typhoonEye.ui.util.displayName
 import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.displayLabel
 import seamain.org.typhoonEye.ui.util.formatCoordinate
@@ -107,7 +108,8 @@ fun DetailScreen(
         stringResource(R.string.tab_forecast)
     )
     val last = typhoon.latestPoint()
-    val detailCd = stringResource(R.string.cd_typhoon_detail, typhoon.name)
+    val title = typhoon.displayName()
+    val detailCd = stringResource(R.string.cd_typhoon_detail, title)
     val backCd = stringResource(R.string.back)
     val shareCd = stringResource(R.string.share_summary)
     val loadingDetailCd = stringResource(R.string.cd_loading_detail)
@@ -121,9 +123,11 @@ fun DetailScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(typhoon.name, fontWeight = FontWeight.SemiBold)
+                        Text(title, fontWeight = FontWeight.SemiBold)
                         Text(
-                            text = typhoon.englishName.ifBlank { typhoon.id },
+                            text = typhoon.englishName.trim()
+                                .takeUnless { it.isBlank() || it.equals(title, ignoreCase = true) }
+                                ?.let { "$it · ${typhoon.id}" } ?: typhoon.id,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
