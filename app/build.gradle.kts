@@ -179,6 +179,9 @@ android {
                 ?: System.getenv("GITHUB_REPO")?.takeIf { it.isNotBlank() }
                 ?: "TyphoonEyeAndroid").asBuildConfigLiteral()
         )
+        // TYP-58: this (GitHub) build sends lat/lng to QWeather, so location-based alerts
+        // are opt-in: an untouched toggle resolves to off.
+        buildConfigField("boolean", "LOCATION_ALERTS_DEFAULT", "false")
     }
 
     signingConfigs {

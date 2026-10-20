@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -20,6 +21,7 @@ import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
+import seamain.org.typhoonEye.data.preferences.LocationOptIn
 import seamain.org.typhoonEye.data.preferences.UserSettings
 import seamain.org.typhoonEye.data.update.AppUpdateRepository
 import seamain.org.typhoonEye.domain.model.AppUpdateInfo
@@ -115,14 +117,36 @@ class TyphoonViewModel @Inject constructor(
 
     val appUpdateState: StateFlow<AppUpdateState> = appUpdateRepository.state
 
-    /** Latest device fix (live) or DataStore cache — used for distance UI + map. */
+    /**
+     * Latest device fix (live) or DataStore cache — used for distance UI + map.
+     * Null while location alerts are off (TYP-58: location is opt-in).
+     */
     private val _liveUserLocation = MutableStateFlow<UserLocation?>(null)
     val userLocation: StateFlow<UserLocation?> = combine(
         settings,
         _liveUserLocation
     ) { prefs, live ->
-        live?.takeIf { it.isValid } ?: prefs.cachedUserLocation
+        if (!prefs.locationAlertsEnabled) null
+        else live?.takeIf { it.isValid } ?: prefs.cachedUserLocation
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * TYP-58: one-time notice for upgraders whose location alerts were
+     * effectively on (old default) and are now off until they opt in again.
+     * Built on the repository flow (not [settings]) so the in-memory default never shows it.
+     */
+    val showLocationOptInNotice: StateFlow<Boolean> = preferences.settings
+        .map { prefs ->
+            LocationOptIn.shouldShowUpgradeNotice(
+                flavorDefault = preferences.locationAlertsDefault,
+                locationAlertsStoredValue = prefs.locationAlertsStoredValue,
+                noticeAlreadyShown = prefs.locationOptInNoticeShown,
+                hasLocationPermission = locationProvider.hasLocationPermission(),
+                hasCachedLocation = prefs.cachedUserLocation != null
+            )
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val filteredTyphoons: StateFlow<List<Typhoon>> = combine(
         _allTyphoons,
@@ -257,6 +281,22 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
+    /** TYP-58 notice: "Turn on". Caller then requests location permission. */
+    fun acceptLocationOptInNotice() {
+        viewModelScope.launch {
+            preferences.markLocationOptInNoticeShown()
+        }
+        setLocationAlertsEnabled(true)
+    }
+
+    /** TYP-58 notice: dismiss. Stores an explicit "off" so the choice is the user's. */
+    fun dismissLocationOptInNotice() {
+        viewModelScope.launch {
+            preferences.markLocationOptInNoticeShown()
+            preferences.setLocationAlertsEnabled(false)
+        }
+    }
+
     fun setDynamicColorEnabled(enabled: Boolean) {
         viewModelScope.launch { preferences.setDynamicColorEnabled(enabled) }
     }
@@ -276,7 +316,8 @@ class TyphoonViewModel @Inject constructor(
      */
     fun refreshUserLocation(force: Boolean = false) {
         viewModelScope.launch {
-            val prefs = settings.value
+            // Read the stored value: settings.value may still be the in-memory default.
+            val prefs = preferences.settings.firstOrNull() ?: return@launch
             if (!prefs.locationAlertsEnabled && !force) return@launch
             if (!locationProvider.hasLocationPermission()) return@launch
             val fix = locationProvider.getLocation() ?: return@launch
@@ -331,7 +372,8 @@ class TyphoonViewModel @Inject constructor(
     }
 
     private suspend fun resolveUserLocationForAlerts(): UserLocation? {
-        val prefs = settings.value
+        // TYP-58: gate on the persisted value, never on the stateIn() placeholder.
+        val prefs = preferences.settings.firstOrNull() ?: return null
         if (!prefs.locationAlertsEnabled) return null
         // Fresh fix when possible; otherwise last cached position for offline/Worker parity.
         if (locationProvider.hasLocationPermission()) {

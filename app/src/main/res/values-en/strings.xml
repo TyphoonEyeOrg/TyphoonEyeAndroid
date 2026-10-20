@@ -255,4 +255,9 @@
     <string name="oss_jetpack_desc">Local SQLite database persistence, reactive DataStore preferences, and background Live scheduling</string>
     <string name="oss_eddsa_desc">Ed25519 / EdDSA cryptographic signature algorithm implementation for QWeather API</string>
     <string name="oss_test_desc">Testing utility for Kotlin Flows and Mockito unit testing framework</string>
+    <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
+    <string name="location_opt_in_notice_title">Location-based alerts are now opt-in</string>
+    <string name="location_opt_in_notice_body">%1$s no longer uses your location by default. Location-based alerts (distance alerts and official warnings near you) stay off until you turn them on yourself. You can change this any time in Settings.</string>
+    <string name="location_opt_in_notice_turn_on">Turn on</string>
+    <string name="location_opt_in_notice_dismiss">Not now</string>
 </resources>
