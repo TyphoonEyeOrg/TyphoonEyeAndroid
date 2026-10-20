@@ -79,7 +79,14 @@ import seamain.org.typhoonEye.ui.util.windCircleRing
 import seamain.org.typhoonEye.ui.util.windRadii10
 import seamain.org.typhoonEye.ui.util.windRadii12
 import seamain.org.typhoonEye.ui.util.windRadii7
-import seamain.org.typhoonEye.ui.util.windRadiusPaddingDegrees
+import seamain.org.typhoonEye.ui.util.CameraFit
+import seamain.org.typhoonEye.ui.util.GeoPoint
+import seamain.org.typhoonEye.ui.util.computeCameraFit
+import seamain.org.typhoonEye.ui.util.trackReferenceLng
+import seamain.org.typhoonEye.ui.util.unwrapLng
+import seamain.org.typhoonEye.ui.util.unwrapRing
+import seamain.org.typhoonEye.ui.util.unwrapTrack
+import seamain.org.typhoonEye.ui.util.zoomForSpan
 
 private const val TAG = "TyphoonTrackMap"
 private const val SOURCE_HISTORY = "ty-history-line"
@@ -476,6 +483,14 @@ private fun applyTrackLayers(
         SOURCE_WIND7, SOURCE_WIND10, SOURCE_WIND12
     ).forEach { id -> runCatching { style.removeSource(id) } }
 
+    // #14 / TYP-55: map (GCJ-02 if needed) first, then unwrap every coordinate against
+    // the storm's current position so nothing jumps across the antimeridian.
+    val mappedHistory = history.map { mapGeo(it.lng, it.lat, useGcj02) }
+    val mappedForecast = forecast.map { mapGeo(it.lng, it.lat, useGcj02) }
+    val refLng = trackReferenceLng(mappedHistory, mappedForecast)
+    val drawHistory = unwrapTrack(mappedHistory, refLng)
+    val drawForecast = unwrapTrack(mappedForecast, refLng)
+
     // Wind circles under tracks — around the latest observed point.
     val current = history.lastOrNull()
     if (current != null) {
@@ -490,7 +505,8 @@ private fun applyTrackLayers(
             lineColor = WIND7_LINE,
             fillOpacity = 0.18f,
             lineOpacity = 0.75f,
-            useGcj02 = useGcj02
+            useGcj02 = useGcj02,
+            refLng = refLng
         )
         addWindCircleLayer(
             style = style,
@@ -503,7 +519,8 @@ private fun applyTrackLayers(
             lineColor = WIND10_LINE,
             fillOpacity = 0.22f,
             lineOpacity = 0.8f,
-            useGcj02 = useGcj02
+            useGcj02 = useGcj02,
+            refLng = refLng
         )
         addWindCircleLayer(
             style = style,
@@ -516,12 +533,13 @@ private fun applyTrackLayers(
             lineColor = WIND12_LINE,
             fillOpacity = 0.28f,
             lineOpacity = 0.85f,
-            useGcj02 = useGcj02
+            useGcj02 = useGcj02,
+            refLng = refLng
         )
     }
 
     if (history.size >= 2) {
-        style.addSource(GeoJsonSource(SOURCE_HISTORY, lineString(history, useGcj02)))
+        style.addSource(GeoJsonSource(SOURCE_HISTORY, lineString(drawHistory)))
         style.addLayer(
             LineLayer(LAYER_HISTORY, SOURCE_HISTORY).withProperties(
                 PropertyFactory.lineColor(historyColorHex),
@@ -534,11 +552,11 @@ private fun applyTrackLayers(
     }
 
     val forecastLine = buildList {
-        if (history.isNotEmpty() && forecast.isNotEmpty()) add(history.last())
-        addAll(forecast)
+        if (drawHistory.isNotEmpty() && drawForecast.isNotEmpty()) add(drawHistory.last())
+        addAll(drawForecast)
     }
     if (forecastLine.size >= 2) {
-        style.addSource(GeoJsonSource(SOURCE_FORECAST, lineString(forecastLine, useGcj02)))
+        style.addSource(GeoJsonSource(SOURCE_FORECAST, lineString(forecastLine)))
         style.addLayer(
             LineLayer(LAYER_FORECAST, SOURCE_FORECAST).withProperties(
                 PropertyFactory.lineColor(forecastColorHex),
@@ -556,17 +574,17 @@ private fun applyTrackLayers(
         val level = resolveIntensity(point.strong, point.power)
         val color = intensityColor(level)
         val isCurrent = index == history.lastIndex
-        val (lng, lat) = mapLngLat(point.lng, point.lat, useGcj02)
-        val feature = Feature.fromGeometry(Point.fromLngLat(lng, lat))
+        val p = drawHistory[index]
+        val feature = Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat))
         feature.addBooleanProperty("current", isCurrent)
         feature.addStringProperty("color", color.toHexRgb())
         pointFeatures += feature
     }
-    forecast.forEach { point ->
+    forecast.forEachIndexed { index, point ->
         val level = resolveIntensity(point.strong, point.power)
         val color = if (level.rank > 0) intensityColor(level) else null
-        val (lng, lat) = mapLngLat(point.lng, point.lat, useGcj02)
-        val feature = Feature.fromGeometry(Point.fromLngLat(lng, lat))
+        val p = drawForecast[index]
+        val feature = Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat))
         feature.addBooleanProperty("current", false)
         feature.addStringProperty("color", color?.toHexRgb() ?: forecastColorHex)
         pointFeatures += feature
@@ -614,9 +632,12 @@ private fun applyTrackLayers(
     val user = userLocation?.takeIf { it.isValid }
     val stormNow = history.lastOrNull()
     if (user != null) {
-        val (uLng, uLat) = mapLngLat(user.longitude, user.latitude, useGcj02)
+        val (rawULng, uLat) = mapLngLat(user.longitude, user.latitude, useGcj02)
+        // Same frame as the track, so the link takes the short way round.
+        val uLng = refLng?.let { unwrapLng(rawULng, it) } ?: rawULng
         if (stormNow != null) {
-            val (sLng, sLat) = mapLngLat(stormNow.lng, stormNow.lat, useGcj02)
+            val sLng = drawHistory.last().lng
+            val sLat = drawHistory.last().lat
             val link = LineString.fromLngLats(
                 listOf(
                     Point.fromLngLat(uLng, uLat),
@@ -659,16 +680,21 @@ private fun addWindCircleLayer(
     lineColor: String,
     fillOpacity: Float,
     lineOpacity: Float,
-    useGcj02: Boolean = false
+    useGcj02: Boolean = false,
+    refLng: Double? = null
 ) {
     if (radii == null || !radii.hasAny) return
     val ring = windCircleRing(center.lat, center.lng, radii)
     if (ring.size < 4) return
 
-    val coords = ArrayList<Point>(ring.size)
-    ring.forEach { (lat, lng) ->
+    // GCJ-02 first (as for the track), then unwrap so the ring stays contiguous at 180°.
+    val mappedRing = ring.map { (lat, lng) ->
         val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
-        coords.add(Point.fromLngLat(mLng, mLat))
+        mLat to mLng
+    }
+    val coords = ArrayList<Point>(mappedRing.size)
+    unwrapRing(mappedRing, refLng).forEach { (lat, lng) ->
+        coords.add(Point.fromLngLat(lng, lat))
     }
     val polygon = Polygon.fromLngLats(listOf(coords))
     style.addSource(GeoJsonSource(sourceId, polygon))
@@ -697,69 +723,38 @@ private fun fitCamera(
     userLocation: UserLocation? = null,
     useGcj02: Boolean = false
 ) {
-    val points = history + forecast
-    if (points.isEmpty() && userLocation?.isValid != true) return
-    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
-    val user = userLocation?.takeIf { it.isValid }
+    fun geo(lng: Double, lat: Double): GeoPoint = mapGeo(lng, lat, useGcj02)
 
-    if (valid.isEmpty() && user == null) return
+    val track = (history + forecast)
+        .filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+        .map { geo(it.lng, it.lat) }
+    val currentPoint = history.lastOrNull()
+        ?.takeIf { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+    val current = currentPoint?.let { geo(it.lng, it.lat) }
+    val windRadiusKm = currentPoint?.let { p ->
+        listOfNotNull(p.windRadii7()?.maxKm, p.windRadii10()?.maxKm, p.windRadii12()?.maxKm)
+            .maxOrNull()
+    } ?: 0.0
+    val user = userLocation?.takeIf { it.isValid }?.let { geo(it.longitude, it.latitude) }
 
-    fun ptLatLng(lng: Double, lat: Double): LatLng {
-        val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
-        return LatLng(mLat, mLng)
-    }
-
-    val mapped = valid.map { ptLatLng(it.lng, it.lat) }
-    val userLl = user?.let { ptLatLng(it.longitude, it.latitude) }
-
-    var minLat = mapped.minOfOrNull { it.latitude } ?: userLl!!.latitude
-    var maxLat = mapped.maxOfOrNull { it.latitude } ?: userLl!!.latitude
-    var minLng = mapped.minOfOrNull { it.longitude } ?: userLl!!.longitude
-    var maxLng = mapped.maxOfOrNull { it.longitude } ?: userLl!!.longitude
-
-    if (userLl != null) {
-        minLat = minOf(minLat, userLl.latitude)
-        maxLat = maxOf(maxLat, userLl.latitude)
-        minLng = minOf(minLng, userLl.longitude)
-        maxLng = maxOf(maxLng, userLl.longitude)
-    }
-
-    history.lastOrNull()?.let { current ->
-        val maxR = listOfNotNull(
-            current.windRadii7()?.maxKm,
-            current.windRadii10()?.maxKm,
-            current.windRadii12()?.maxKm
-        ).maxOrNull() ?: 0.0
-        if (maxR > 0.0) {
-            val center = ptLatLng(current.lng, current.lat)
-            val (latPad, lngPad) = windRadiusPaddingDegrees(center.latitude, maxR)
-            minLat = minOf(minLat, center.latitude - latPad)
-            maxLat = maxOf(maxLat, center.latitude + latPad)
-            minLng = minOf(minLng, center.longitude - lngPad)
-            maxLng = maxOf(maxLng, center.longitude + lngPad)
+    // #14 / TYP-55: shortest-arc fit across the antimeridian; see CameraBounds.kt.
+    when (val fit = computeCameraFit(track, current, windRadiusKm, user) ?: return) {
+        is CameraFit.Center ->
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fit.lat, fit.lng), fit.zoom))
+        is CameraFit.Bounds -> runCatching {
+            // LatLngBounds.from() keeps the unwrapped east (> 180 allowed, west <= east
+            // required); the native camera fit projects it linearly, so the box stays on
+            // the short side of 180°. Builder would also work, but from() is explicit.
+            val bounds = LatLngBounds.from(fit.north, fit.east, fit.south, fit.west)
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 72))
+        }.onFailure {
+            map.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(fit.centerLat, fit.centerLng),
+                    zoomForSpan(fit.lngSpan, fit.latSpan)
+                )
+            )
         }
-    }
-
-    if (mapped.size <= 1 && userLl == null && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
-        val p = mapped.firstOrNull() ?: return
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(p, 5.5))
-        return
-    }
-
-    val latSpan = (maxLat - minLat).coerceAtLeast(0.3)
-    val lngSpan = (maxLng - minLng).coerceAtLeast(0.3)
-    val midLat = (minLat + maxLat) / 2.0
-    val midLng = (minLng + maxLng) / 2.0
-
-    runCatching {
-        val builder = LatLngBounds.Builder()
-        builder.include(LatLng(midLat - latSpan / 2, midLng - lngSpan / 2))
-        builder.include(LatLng(midLat + latSpan / 2, midLng + lngSpan / 2))
-        mapped.forEach { builder.include(it) }
-        if (userLl != null) builder.include(userLl)
-        map.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 72))
-    }.onFailure {
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 4.5))
     }
 }
 
@@ -770,14 +765,14 @@ private fun mapLngLat(lng: Double, lat: Double, useGcj02: Boolean): Pair<Double,
     return p.lng to p.lat
 }
 
-private fun lineString(points: List<TyphoonPoint>, useGcj02: Boolean = false): LineString {
-    val coords = ArrayList<Point>(points.size)
-    points.forEach {
-        val (lng, lat) = mapLngLat(it.lng, it.lat, useGcj02)
-        coords.add(Point.fromLngLat(lng, lat))
-    }
-    return LineString.fromLngLats(coords)
+private fun mapGeo(lng: Double, lat: Double, useGcj02: Boolean): GeoPoint {
+    val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
+    return GeoPoint(mLat, mLng)
 }
+
+/** Points already mapped and unwrapped (see [unwrapTrack]). */
+private fun lineString(points: List<GeoPoint>): LineString =
+    LineString.fromLngLats(points.map { Point.fromLngLat(it.lng, it.lat) })
 
 private fun Color.toHexRgb(): String {
     val argb = toArgb()

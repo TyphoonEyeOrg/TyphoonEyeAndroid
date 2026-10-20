@@ -12,6 +12,8 @@ bin/
 gen/
 out/
 release/
+# except app/src/release (TYP-55 debug-demo stub)
+!/app/src/release/
 
 # Gradle
 .gradle/
