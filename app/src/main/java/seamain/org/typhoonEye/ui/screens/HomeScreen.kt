@@ -96,6 +96,7 @@ import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.formatPressure
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.latestPoint
+import seamain.org.typhoonEye.ui.util.displayName
 import seamain.org.typhoonEye.ui.util.listSubtitle
 import seamain.org.typhoonEye.ui.util.localizedLabel
 import seamain.org.typhoonEye.ui.util.moveLabel
@@ -477,7 +478,8 @@ fun TyphoonListCard(
     val accent = intensityColor(intensity)
     val context = LocalContext.current
     val distanceKm = typhoon.distanceKmFrom(userLocation)
-    val cardCd = stringResource(R.string.cd_typhoon_card, typhoon.name, intensity.localizedLabel())
+    val title = typhoon.displayName()
+    val cardCd = stringResource(R.string.cd_typhoon_card, title, intensity.localizedLabel())
 
     // Native ripple from OutlinedCard's clickable handles press feedback
     OutlinedCard(
@@ -515,13 +517,13 @@ fun TyphoonListCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = typhoon.name,
+                            text = title,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        val subtitle = typhoon.listSubtitle()
+                        val subtitle = typhoon.listSubtitle(title)
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,

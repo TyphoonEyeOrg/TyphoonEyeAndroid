@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.data.preferences.AppLanguage
+import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.theme.IntensitySts
@@ -78,21 +80,34 @@ fun Typhoon.currentIntensity(): IntensityLevel {
 
 fun Typhoon.latestPoint(): TyphoonPoint? = points.lastOrNull()
 
-/** Prefer a readable storm name; Juhe uses intensity as name for unnamed lows. */
-fun Typhoon.displayName(context: Context): String {
+/**
+ * Storm name in the app language (#19), or null for unnamed systems (Juhe uses the
+ * intensity label as name for lows; "NAMELESS" enname). Pure: safe in unit tests.
+ */
+fun Typhoon.localizedName(language: AppLanguage): String? {
     val cn = name.trim()
-    val en = englishName.trim()
-    val looksLikeIntensity = cn.isBlank() ||
-        cn == strong.trim() ||
-        cn in INTENSITY_AS_NAME ||
-        en.equals("NAMELESS", ignoreCase = true)
-    return when {
-        !looksLikeIntensity -> cn
-        en.isNotBlank() && !en.equals("NAMELESS", ignoreCase = true) -> en
-        id.isNotBlank() -> context.getString(R.string.display_name_low_id, id)
-        cn.isNotBlank() -> cn
-        else -> context.getString(R.string.display_name_active_fallback)
-    }
+    val en = englishName.trim().takeUnless { it.equals("NAMELESS", ignoreCase = true) }.orEmpty()
+    val cnIsName = cn.isNotBlank() && cn != strong.trim() && cn !in INTENSITY_AS_NAME &&
+        !cn.equals(id.trim(), ignoreCase = true)
+    if (!cnIsName && en.isBlank()) return null
+    return StormNames.localize(en, cn.takeIf { cnIsName }, language).ifBlank { null }
+}
+
+/** Readable storm name in the app language; falls back to the id for unnamed lows. */
+fun Typhoon.displayName(context: Context, language: AppLanguage = AppLanguage.current()): String =
+    localizedName(language)
+        ?: if (id.isNotBlank()) {
+            context.getString(R.string.display_name_low_id, id)
+        } else {
+            name.trim().ifBlank { context.getString(R.string.display_name_active_fallback) }
+        }
+
+/** Compose variant; recomposes with the configuration locale. */
+@Composable
+fun Typhoon.displayName(): String {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.ui.platform.LocalConfiguration.current
+    return displayName(context)
 }
 
 /**
@@ -122,10 +137,11 @@ fun TyphoonPoint.displayIntensity(context: Context): String =
  * List-card subtitle: English name and id, each once. QWeather storms carry the id
  * in [Typhoon.englishName], which used to render as "NP_2629 · NP_2629".
  */
-fun Typhoon.listSubtitle(): String {
+fun Typhoon.listSubtitle(title: String = name): String {
     val en = englishName.trim()
     val showEnglish = en.isNotBlank() &&
         !en.equals(name.trim(), ignoreCase = true) &&
+        !en.equals(title.trim(), ignoreCase = true) &&
         !en.equals(id.trim(), ignoreCase = true)
     return buildList {
         if (showEnglish) add(en)
