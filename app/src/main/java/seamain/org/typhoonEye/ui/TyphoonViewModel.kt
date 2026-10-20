@@ -330,7 +330,8 @@ class TyphoonViewModel @Inject constructor(
     fun loadDemoData() {
         refreshJob?.cancel()
         viewModelScope.launch {
-            val mock = getMockTyphoons()
+            // Debug builds append an antimeridian-crossing sample (src/debug); release: none.
+            val mock = getMockTyphoons() + DebugDemoStorms.extra()
             _allTyphoons.value = mock
             _uiState.value = TyphoonUiState.Success(mock, fromCache = false)
             _dataMode.value = DataMode.Demo
