@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.preferences.AppLanguage
+import seamain.org.typhoonEye.domain.names.NameColumn
 import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
@@ -84,18 +85,21 @@ fun Typhoon.latestPoint(): TyphoonPoint? = points.lastOrNull()
  * Storm name in the app language (#19), or null for unnamed systems (Juhe uses the
  * intensity label as name for lows; "NAMELESS" enname). Pure: safe in unit tests.
  */
-fun Typhoon.localizedName(language: AppLanguage): String? {
+fun Typhoon.localizedName(language: AppLanguage): String? = localizedName(StormNames.columnFor(language))
+
+/** Same, for an explicit name column (system-locale HK/MO → HKO, etc.). */
+fun Typhoon.localizedName(column: NameColumn): String? {
     val cn = name.trim()
     val en = englishName.trim().takeUnless { it.equals("NAMELESS", ignoreCase = true) }.orEmpty()
     val cnIsName = cn.isNotBlank() && cn != strong.trim() && cn !in INTENSITY_AS_NAME &&
         !cn.equals(id.trim(), ignoreCase = true)
     if (!cnIsName && en.isBlank()) return null
-    return StormNames.localize(en, cn.takeIf { cnIsName }, language).ifBlank { null }
+    return StormNames.localize(en, cn.takeIf { cnIsName }, column).ifBlank { null }
 }
 
 /** Readable storm name in the app language; falls back to the id for unnamed lows. */
-fun Typhoon.displayName(context: Context, language: AppLanguage = AppLanguage.current()): String =
-    localizedName(language)
+fun Typhoon.displayName(context: Context, column: NameColumn = StormNames.currentColumn()): String =
+    localizedName(column)
         ?: if (id.isNotBlank()) {
             context.getString(R.string.display_name_low_id, id)
         } else {
