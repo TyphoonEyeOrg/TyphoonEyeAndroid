@@ -21,6 +21,8 @@ import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.displayName
+import seamain.org.typhoonEye.domain.names.NameColumn
+import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.ui.util.formatCoordinate
 import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.latestPoint
@@ -46,7 +48,8 @@ class TyphoonLiveNotifier(private val context: Context) {
         }
     }
 
-    fun update(activeTyphoons: List<Typhoon>, enabled: Boolean) {
+    fun update(activeTyphoons: List<Typhoon>, enabled: Boolean, nameColumn: NameColumn? = null) {
+        val column = nameColumn ?: StormNames.currentColumn()
         if (!enabled || activeTyphoons.isEmpty()) {
             cancel()
             return
@@ -59,7 +62,7 @@ class TyphoonLiveNotifier(private val context: Context) {
         val primary = activeTyphoons.maxByOrNull { it.currentIntensity().rank } ?: return
         val level = primary.currentIntensity()
         val last = primary.latestPoint()
-        val content = buildLiveContent(primary, level, last, activeTyphoons.size)
+        val content = buildLiveContent(primary, level, last, activeTyphoons.size, column)
 
         val openIntent = Intent(appContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -126,19 +129,23 @@ class TyphoonLiveNotifier(private val context: Context) {
         val canPromote = canPostPromotedNotifications()
         Log.i(
             TAG,
-            "Live update ${primary.displayName(appContext)} promotable=$promotable canPromote=$canPromote chip=${content.chip}"
+            "Live update ${liveTitle(primary, column)} promotable=$promotable canPromote=$canPromote chip=${content.chip}"
         )
 
         try {
             NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, notification)
             Log.i(
                 TAG,
-                "Posted live update for ${primary.displayName(appContext)} (${activeTyphoons.size} active)"
+                "Posted live update for ${liveTitle(primary, column)} (${activeTyphoons.size} active)"
             )
         } catch (e: SecurityException) {
             Log.e(TAG, "notify() blocked", e)
         }
     }
+
+    /** Notification title; column comes from the saved app language (see the worker). */
+    internal fun liveTitle(typhoon: Typhoon, column: NameColumn): String =
+        typhoon.displayName(appContext, column)
 
     fun cancel() {
         NotificationManagerCompat.from(appContext).cancel(NOTIFICATION_ID)
@@ -169,9 +176,10 @@ class TyphoonLiveNotifier(private val context: Context) {
         typhoon: Typhoon,
         level: IntensityLevel,
         last: TyphoonPoint?,
-        activeCount: Int
+        activeCount: Int,
+        column: NameColumn
     ): LiveContent {
-        val title = typhoon.displayName(appContext)
+        val title = liveTitle(typhoon, column)
         val intensity = level.label(appContext)
         val wind = last?.let { formatWind(it.speed) }
         val pressure = last?.takeIf { it.pressure > 0 }?.let { "${it.pressure} hPa" }

@@ -49,6 +49,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import seamain.org.typhoonEye.ui.screens.LicensesScreen
+import seamain.org.typhoonEye.ui.util.displayName
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -475,7 +476,7 @@ fun TyphoonApp(
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_SUBJECT,
-                                    context.getString(R.string.share_subject, typhoon.name)
+                                    context.getString(R.string.share_subject, typhoon.displayName(context))
                                 )
                                 putExtra(Intent.EXTRA_TEXT, text)
                             }

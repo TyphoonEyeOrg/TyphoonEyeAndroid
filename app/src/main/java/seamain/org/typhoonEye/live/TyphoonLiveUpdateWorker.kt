@@ -16,6 +16,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
+import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
 import java.util.concurrent.TimeUnit
@@ -39,6 +40,8 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             val settings = preferences.settings.first()
+            // Names follow the saved app language, not this worker Context's locale.
+            val nameColumn = StormNames.columnForPreference(settings.appLanguage)
 
             if (!settings.liveActivityEnabled && !settings.emergencyAlertsEnabled) {
                 liveNotifier.cancel()
@@ -64,7 +67,7 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
                     } else {
                         null
                     }
-                    warningRepository.fetchTyphoonAlerts(active, userLocation)
+                    warningRepository.fetchTyphoonAlerts(active, userLocation, nameColumn)
                         .onSuccess { alerts ->
                             alertNotifier.publish(alerts, enabled = true)
                         }
@@ -76,7 +79,7 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
                 }
                 // Always refresh Live after alerts so it isn't swallowed by Alerting grouping.
                 if (settings.liveActivityEnabled) {
-                    liveNotifier.update(active, enabled = true)
+                    liveNotifier.update(active, enabled = true, nameColumn = nameColumn)
                 } else {
                     liveNotifier.cancel()
                 }

@@ -1,6 +1,9 @@
 package seamain.org.typhoonEye.data.repository
 
 import android.content.Context
+import seamain.org.typhoonEye.ui.util.displayName
+import seamain.org.typhoonEye.domain.names.NameColumn
+import seamain.org.typhoonEye.domain.names.StormNames
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +48,8 @@ class DefaultWarningRepository @Inject constructor(
 
     override suspend fun fetchTyphoonAlerts(
         activeTyphoons: List<Typhoon>,
-        userLocation: UserLocation?
+        userLocation: UserLocation?,
+        nameColumn: NameColumn?
     ): Result<List<EmergencyAlert>> {
         return runCatching {
             val official = if (qWeatherConfigured) {
@@ -53,7 +57,7 @@ class DefaultWarningRepository @Inject constructor(
             } else {
                 emptyList()
             }
-            val intensity = synthesizeIntensityAlerts(activeTyphoons, userLocation)
+            val intensity = synthesizeIntensityAlerts(activeTyphoons, userLocation, nameColumn ?: StormNames.currentColumn())
             (official + intensity)
                 .distinctBy { it.id }
                 .sortedByDescending { it.severity.rank }
@@ -88,7 +92,8 @@ class DefaultWarningRepository @Inject constructor(
 
     private fun synthesizeIntensityAlerts(
         activeTyphoons: List<Typhoon>,
-        userLocation: UserLocation?
+        userLocation: UserLocation?,
+        nameColumn: NameColumn
     ): List<EmergencyAlert> {
         return activeTyphoons.mapNotNull { typhoon ->
             val level = typhoon.currentIntensity()
@@ -132,7 +137,7 @@ class DefaultWarningRepository @Inject constructor(
                 id = "intensity-${typhoon.id}-${level.name}",
                 title = appContext.getString(
                     R.string.intensity_alert_title,
-                    typhoon.name,
+                    typhoon.displayName(appContext, nameColumn),
                     intensityLabel
                 ),
                 body = buildString {

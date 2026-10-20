@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import seamain.org.typhoonEye.ui.util.displayName
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.AppLanguage
@@ -156,6 +157,7 @@ class TyphoonViewModel @Inject constructor(
         list.filter { typhoon ->
             val matchesQuery = q.isBlank() ||
                 typhoon.name.contains(q, ignoreCase = true) ||
+                typhoon.displayName(appContext).contains(q, ignoreCase = true) ||
                 typhoon.englishName.contains(q, ignoreCase = true) ||
                 typhoon.id.contains(q, ignoreCase = true)
             val matchesFilter = filter == null || typhoon.currentIntensity() == filter
@@ -520,11 +522,12 @@ class TyphoonViewModel @Inject constructor(
         val last = typhoon.points.lastOrNull()
         return buildString {
             val en = typhoon.englishName.trim()
+            val title = typhoon.displayName(appContext)
             appendLine(
-                if (en.isBlank() || en.equals(typhoon.name.trim(), ignoreCase = true)) {
-                    appContext.getString(R.string.share_header_name_only, typhoon.name)
+                if (en.isBlank() || en.equals(title.trim(), ignoreCase = true)) {
+                    appContext.getString(R.string.share_header_name_only, title)
                 } else {
-                    appContext.getString(R.string.share_header, typhoon.name, en)
+                    appContext.getString(R.string.share_header, title, en)
                 }
             )
             appendLine(appContext.getString(R.string.share_id, typhoon.id))
