@@ -94,6 +94,13 @@ class TyphoonViewModel @Inject constructor(
     private var refreshJob: Job? = null
     private var detailJob: Job? = null
 
+    /**
+     * Identity of the latest list load. A finishing [loadTyphoons] job may clear
+     * [isRefreshing] only while it is still current, so cancelling an older pull
+     * (rapid re-pull, demo snapshot) cannot stop a newer spinner or publish stale data.
+     */
+    private var refreshGeneration = 0
+
     private val _dataMode = MutableStateFlow(DataMode.Live)
     val dataMode: StateFlow<DataMode> = _dataMode.asStateFlow()
 
@@ -330,7 +337,11 @@ class TyphoonViewModel @Inject constructor(
 
     /** Load bundled sample typhoons so UI / Live 状态 can be previewed offline. */
     fun loadDemoData() {
+        // Drop any in-flight list load before painting demo data. Bump first so a
+        // late completion of the cancelled job cannot clear the spinner or overwrite this snapshot.
+        refreshGeneration++
         refreshJob?.cancel()
+        refreshJob = null
         viewModelScope.launch {
             // Debug builds append an antimeridian-crossing sample (src/debug); release: none.
             val mock = getMockTyphoons() + DebugDemoStorms.extra()
@@ -405,31 +416,43 @@ class TyphoonViewModel @Inject constructor(
     }
 
     private fun loadTyphoons(forceRefresh: Boolean) {
+        val generation = ++refreshGeneration
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
-            // Stale-while-revalidate: paint the Room cache first, then let the repository
-            // decide (by TTL) whether a network fetch is needed.
-            if (_uiState.value !is TyphoonUiState.Success) {
-                repository.getCachedFeed()
-                    ?.takeIf { it.typhoons.isNotEmpty() }
-                    ?.let { applyFeed(it) }
-            }
-            val hadData = _uiState.value is TyphoonUiState.Success
-            _isRefreshing.value = true
-            if (!hadData) {
-                _uiState.value = TyphoonUiState.Loading
-            }
-
-            repository.getActiveTyphoons(forceRefresh = forceRefresh)
-                .onSuccess { feed -> applyFeed(feed) }
-                .onFailure { error ->
-                    if (!hadData) {
-                        _uiState.value = TyphoonUiState.Error(
-                            error.message ?: appContext.getString(R.string.error_unknown)
-                        )
-                    }
+            try {
+                // Stale-while-revalidate: paint the Room cache first, then let the repository
+                // decide (by TTL) whether a network fetch is needed.
+                if (_uiState.value !is TyphoonUiState.Success) {
+                    val cached = repository.getCachedFeed()
+                        ?.takeIf { it.typhoons.isNotEmpty() }
+                    if (generation != refreshGeneration) return@launch
+                    cached?.let { applyFeed(it) }
                 }
-            _isRefreshing.value = false
+                if (generation != refreshGeneration) return@launch
+                val hadData = _uiState.value is TyphoonUiState.Success
+                _isRefreshing.value = true
+                if (!hadData) {
+                    _uiState.value = TyphoonUiState.Loading
+                }
+
+                val result = repository.getActiveTyphoons(forceRefresh = forceRefresh)
+                if (generation != refreshGeneration) return@launch
+                result
+                    .onSuccess { feed -> applyFeed(feed) }
+                    .onFailure { error ->
+                        if (!hadData) {
+                            _uiState.value = TyphoonUiState.Error(
+                                error.message ?: appContext.getString(R.string.error_unknown)
+                            )
+                        }
+                    }
+            } finally {
+                // Cancellation skips everything after the suspended fetch. Always clear here,
+                // but only for this generation: a newer pull may already have set the flag true.
+                if (generation == refreshGeneration) {
+                    _isRefreshing.value = false
+                }
+            }
         }
     }
 
