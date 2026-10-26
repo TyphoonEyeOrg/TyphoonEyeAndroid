@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -379,7 +381,9 @@ class TyphoonViewModel @Inject constructor(
      * preview alert styling. Debug builds keep the full notification preview.
      */
     fun loadDemoData() {
-        refreshJob?.cancel()
+        // Drop ownership before cancel so a late result cannot overwrite demo data
+        // or clear a spinner that a newer load already owns.
+        cancelInFlightRefresh()
         viewModelScope.launch {
             // Debug builds append an antimeridian-crossing sample (src/debug); release: none.
             val mock = getMockTyphoons() + DebugDemoStorms.extra()
@@ -406,7 +410,7 @@ class TyphoonViewModel @Inject constructor(
 
     /** Leave demo mode and try live data again (lands on NoDataSource without keys). */
     fun exitDemo() {
-        refreshJob?.cancel()
+        cancelInFlightRefresh()
         _dataMode.value = DataMode.Live
         _allTyphoons.value = emptyList()
         _selectedTyphoon.value = null
@@ -472,31 +476,64 @@ class TyphoonViewModel @Inject constructor(
         loadTyphoons(forceRefresh = true)
     }
 
-    private fun loadTyphoons(forceRefresh: Boolean) {
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            // Stale-while-revalidate: paint the Room cache first, then let the repository
-            // decide (by TTL) whether a network fetch is needed.
-            if (_uiState.value !is TyphoonUiState.Success) {
-                repository.getCachedFeed()
-                    ?.takeIf { it.typhoons.isNotEmpty() }
-                    ?.let { applyFeed(it) }
-            }
-            val hadData = _uiState.value is TyphoonUiState.Success
-            _isRefreshing.value = true
-            if (!hadData) {
-                _uiState.value = TyphoonUiState.Loading
-            }
+    /**
+     * Cancel the list load without letting it publish a result or drop the spinner
+     * once another load owns [refreshJob].
+     */
+    private fun cancelInFlightRefresh() {
+        val inFlight = refreshJob
+        refreshJob = null
+        inFlight?.cancel()
+    }
 
-            repository.getActiveTyphoons(forceRefresh = forceRefresh)
-                .onSuccess { feed -> applyFeed(feed) }
-                .onFailure { error ->
-                    if (!hadData) {
-                        _uiState.value = error.toTyphoonUiState()
-                    }
+    private fun loadTyphoons(forceRefresh: Boolean) {
+        val previous = refreshJob
+        // Published before the body runs (LAZY) so a previous attempt cancelled below
+        // can see that it no longer owns the spinner.
+        var current: Job? = null
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            fun stillCurrent(): Boolean = refreshJob === current
+            try {
+                // Stale-while-revalidate: paint the Room cache first, then let the repository
+                // decide (by TTL) whether a network fetch is needed.
+                if (_uiState.value !is TyphoonUiState.Success) {
+                    repository.getCachedFeed()
+                        ?.takeIf { it.typhoons.isNotEmpty() }
+                        ?.let { feed -> if (stillCurrent()) applyFeed(feed) }
                 }
-            _isRefreshing.value = false
+                if (!stillCurrent()) return@launch
+                val hadData = _uiState.value is TyphoonUiState.Success
+                _isRefreshing.value = true
+                if (!hadData) {
+                    _uiState.value = TyphoonUiState.Loading
+                }
+
+                repository.getActiveTyphoons(forceRefresh = forceRefresh)
+                    .onSuccess { feed -> if (stillCurrent()) applyFeed(feed) }
+                    .onFailure { error ->
+                        if (stillCurrent() && !hadData) {
+                            _uiState.value = error.toTyphoonUiState()
+                        }
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("TyphoonViewModel", "Typhoon refresh failed", e)
+                if (stillCurrent() && _uiState.value !is TyphoonUiState.Success) {
+                    _uiState.value = e.toTyphoonUiState()
+                }
+            } finally {
+                // A newer refresh may already have set the flag. Only the job still
+                // stored in refreshJob may clear it (success, error, timeout, or cancel).
+                if (stillCurrent()) {
+                    _isRefreshing.value = false
+                }
+            }
         }
+        current = job
+        refreshJob = job
+        previous?.cancel()
+        job.start()
     }
 
     private fun applyFeed(feed: TyphoonFeed) {

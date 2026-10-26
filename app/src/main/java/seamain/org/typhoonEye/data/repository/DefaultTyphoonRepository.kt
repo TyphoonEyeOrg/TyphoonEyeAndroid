@@ -1,6 +1,7 @@
 package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
@@ -75,7 +76,7 @@ class DefaultTyphoonRepository @Inject constructor(
     )
 
     override suspend fun getCachedFeed(): TyphoonFeed? {
-        val cached = runCatching { localDataSource.getAll() }.getOrNull().orEmpty()
+        val cached = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
         val fetchedAt = syncStore.lastListFetchAtMs
         if (cached.isEmpty() && fetchedAt == null) return null
         return TyphoonFeed(
@@ -92,7 +93,7 @@ class DefaultTyphoonRepository @Inject constructor(
             val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
             val age = lastFetch?.let { now - it }
             if (age != null && age >= 0 && age < minAge) {
-                val cached = runCatching { localDataSource.getAll() }.getOrNull()
+                val cached = runCatchingCancellable { localDataSource.getAll() }.getOrNull()
                 if (cached != null) {
                     Log.d(tag, "List fresh (${age / 1000}s old), serving Room cache")
                     return@withLock Result.success(
@@ -105,10 +106,10 @@ class DefaultTyphoonRepository @Inject constructor(
                 }
             }
 
-            val cachedList = runCatching { localDataSource.getAll() }.getOrNull().orEmpty()
+            val cachedList = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
             val remote = fetchRemoteActive(cachedList.associateBy { it.id })
             remote.onSuccess { list ->
-                runCatching { localDataSource.replaceAll(list) }
+                runCatchingCancellable { localDataSource.replaceAll(list) }
                     .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
                 syncStore.lastListFetchAtMs = now
                 return@withLock Result.success(
@@ -134,9 +135,9 @@ class DefaultTyphoonRepository @Inject constructor(
 
     override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
         val now = clock.nowMs()
-        val cached = runCatching { localDataSource.getById(id) }.getOrNull()
+        val cached = runCatchingCancellable { localDataSource.getById(id) }.getOrNull()
         if (cached != null && cached.hasFullDetail()) {
-            val cachedAt = runCatching { localDataSource.getCachedAtMs(id) }.getOrNull()
+            val cachedAt = runCatchingCancellable { localDataSource.getCachedAtMs(id) }.getOrNull()
             val age = cachedAt?.let { now - it }
             if (age != null && age >= 0 && age < DETAIL_TTL_MS) {
                 Log.d(tag, "Detail $id fresh (${age / 1000}s old), serving Room cache")
@@ -146,7 +147,7 @@ class DefaultTyphoonRepository @Inject constructor(
 
         val remote = fetchRemoteDetail(id)
         remote.onSuccess { detail ->
-            runCatching { localDataSource.upsert(detail) }
+            runCatchingCancellable { localDataSource.upsert(detail) }
                 .onFailure { Log.w(tag, "Failed to cache typhoon detail $id", it) }
             return Result.success(TyphoonActivity.resolve(detail, now))
         }
@@ -162,7 +163,7 @@ class DefaultTyphoonRepository @Inject constructor(
         map { TyphoonActivity.resolve(it, now) }
 
     private suspend fun latestCachedAt(): Long? =
-        runCatching { localDataSource.latestCachedAtMs() }.getOrNull()
+        runCatchingCancellable { localDataSource.latestCachedAtMs() }.getOrNull()
 
     /** A list-only snapshot has a single synthesized point and no forecast. */
     private fun Typhoon.hasFullDetail(): Boolean =
@@ -205,6 +206,8 @@ class DefaultTyphoonRepository @Inject constructor(
                 }
                 Log.w(tag, "Juhe detail error: ${response.reason} (${response.errorCode})")
                 failures.add(juheFailure(response.errorCode, response.reason))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(tag, "Juhe detail request failed", e)
                 failures.add(exceptionFailure(DataSource.Juhe, e))
@@ -221,7 +224,7 @@ class DefaultTyphoonRepository @Inject constructor(
         try {
             val track = qWeatherApi.getStormTrack(stormId)
             if (track.code == "200") {
-                val forecast = runCatching { qWeatherApi.getStormForecast(stormId) }.getOrNull()
+                val forecast = runCatchingCancellable { qWeatherApi.getStormForecast(stormId) }.getOrNull()
                 val infoNow = track.now
                 val typhoon = Typhoon(
                     id = id,
@@ -238,6 +241,8 @@ class DefaultTyphoonRepository @Inject constructor(
             }
             Log.e(tag, "QWeather track error code: ${track.code}")
             failures.add(qWeatherFailure(track.code))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
             failures.add(exceptionFailure(DataSource.QWeather, e))
@@ -276,6 +281,8 @@ class DefaultTyphoonRepository @Inject constructor(
                             } else {
                                 info.toDomain()
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             Log.w(tag, "Juhe detail failed for ${info.tfid}, using list snapshot", e)
                             info.toDomain()
@@ -290,6 +297,8 @@ class DefaultTyphoonRepository @Inject constructor(
                     FetchOutcome(failure = failure)
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(tag, "Juhe request failed", e)
             FetchOutcome(failure = exceptionFailure(DataSource.Juhe, e))
@@ -312,8 +321,8 @@ class DefaultTyphoonRepository @Inject constructor(
             }
 
             val typhoons = activeStorms.map { storm ->
-                val track = runCatching { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
-                val forecast = runCatching { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
+                val track = runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
+                val forecast = runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
                 storm.toDomain(
                     track = track?.track.orEmpty(),
                     now = track?.now,
@@ -322,6 +331,8 @@ class DefaultTyphoonRepository @Inject constructor(
             }
             Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
             FetchOutcome(typhoons = typhoons)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
             FetchOutcome(failure = exceptionFailure(DataSource.QWeather, e))
@@ -355,11 +366,27 @@ class DefaultTyphoonRepository @Inject constructor(
         if (config.viaRelay) SourceFailureKind.ApiError else SourceFailureKind.InvalidKey
 
     /**
+     * Like [runCatching], but cancellation must keep propagating so a superseded
+     * refresh releases [listMutex] instead of being reported as a network error.
+     */
+    private inline fun <T> runCatchingCancellable(block: () -> T): Result<T> {
+        return try {
+            Result.success(block())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * HTTP errors (e.g. from the relay: 429 rate limit, 502/503 upstream trouble) keep their
      * status code; everything else (offline, timeout, TLS, parse error) is a network failure.
+     * Cancellation is rethrown so a superseded refresh releases [listMutex].
      */
-    private fun exceptionFailure(source: DataSource, e: Exception): SourceFailure =
-        if (e is HttpException) {
+    private fun exceptionFailure(source: DataSource, e: Exception): SourceFailure {
+        if (e is CancellationException) throw e
+        return if (e is HttpException) {
             val kind = when (e.code()) {
                 429 -> SourceFailureKind.QuotaExceeded
                 401, 403 -> keyRejected()
@@ -369,6 +396,7 @@ class DefaultTyphoonRepository @Inject constructor(
         } else {
             SourceFailure(source, SourceFailureKind.Network, detail = e.message)
         }
+    }
 
     companion object {
         const val LIST_TTL_MS: Long = 10L * 60 * 1000
