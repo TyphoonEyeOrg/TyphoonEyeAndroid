@@ -1,10 +1,16 @@
 package seamain.org.typhoonEye
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -539,6 +545,84 @@ class TyphoonRepositoryTest {
         repository.getTyphoonDetail("202609").getOrThrow()
 
         verify(juheApi).getTyphoonDetail(juheKey, "202609")
+    }
+
+    @Test
+    fun `cancelled cache read propagates instead of looking like an empty list`() = runTest {
+        whenever(localDataSource.getAll()).thenThrow(CancellationException("cancelled"))
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(
+            JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult())
+        )
+
+        try {
+            repository.getActiveTyphoons()
+            fail("cancellation must propagate out of getActiveTyphoons")
+        } catch (e: CancellationException) {
+            assertEquals("cancelled", e.message)
+        }
+        verify(juheApi, never()).getActiveTyphoons(any())
+    }
+
+    @Test
+    fun `cancelled detail cache read propagates instead of hitting the network`() = runTest {
+        whenever(localDataSource.getById("202609")).thenThrow(CancellationException("cancelled"))
+
+        try {
+            repository.getTyphoonDetail("202609")
+            fail("cancellation must propagate out of getTyphoonDetail")
+        } catch (_: CancellationException) {
+            // expected
+        }
+        verify(juheApi, never()).getTyphoonDetail(any(), any())
+    }
+
+    @Test
+    fun `cancelled in-flight list fetch releases listMutex and does not fall through`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val juhe = object : JuheTyphoonApi {
+            var calls = 0
+            override suspend fun getActiveTyphoons(apiKey: String): JuheActiveListResponse {
+                calls++
+                if (calls == 1) {
+                    entered.complete(Unit)
+                    awaitCancellation()
+                }
+                return JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult())
+            }
+
+            override suspend fun getTyphoonDetail(
+                apiKey: String,
+                typhoonId: String
+            ): JuheDetailResponse = error("unused")
+        }
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        val repo = DefaultTyphoonRepository(
+            juheApi = juhe,
+            qWeatherApi = qWeatherApi,
+            juheKey = juheKey,
+            qWeatherAuth = auth(configured = true),
+            localDataSource = localDataSource,
+            syncStore = FakeSyncStore(),
+            clock = clock
+        )
+
+        val first = async { repo.getActiveTyphoons() }
+        entered.await()
+        val second = async { repo.getActiveTyphoons() }
+        yield()
+        assertFalse(second.isCompleted)
+
+        first.cancel()
+        val secondResult = second.await()
+
+        assertTrue(secondResult.isSuccess)
+        verify(qWeatherApi, never()).getStormList(any(), any())
+        try {
+            first.await()
+            fail("cancelled list fetch must not come back as a source Result")
+        } catch (_: CancellationException) {
+            // expected: the lock was released by propagating cancellation
+        }
     }
 
     // endregion
