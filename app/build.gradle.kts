@@ -337,8 +337,9 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.activity.compose)
-    // #38: debug only. releaseImplementation would merge an exported test
-    // ComponentActivity into the release APK. Compose UI tests live in src/testDebug.
+    // Declares ComponentActivity for Robolectric Compose tests. debugImplementation
+    // (not release) so the test activity is not shipped in the release APK.
+    // Those tests live in src/testDebug (#38). AGP 8.9 does not merge src/test manifests.
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

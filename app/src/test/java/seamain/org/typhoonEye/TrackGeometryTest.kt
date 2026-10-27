@@ -11,7 +11,10 @@ import seamain.org.typhoonEye.ui.util.unwrapTrack
 import seamain.org.typhoonEye.ui.util.windCircleRing
 import kotlin.math.abs
 
-/** #14 / TYP-55: rendered geometry stays continuous across 180°. */
+/**
+ * #14 / TYP-55: rendered geometry stays continuous across 180°.
+ * The debug demo storm is covered by [TrackGeometryDebugTest] in src/testDebug (#38).
+ */
 class TrackGeometryTest {
 
     private val eps = 1e-9

@@ -8,11 +8,11 @@ import seamain.org.typhoonEye.ui.util.unwrapTrack
 import kotlin.math.abs
 
 /**
- * #38: the antimeridian sample exists only in src/debug. Release's
- * [DebugDemoStorms.extra] is empty, so `.single()` fails if this lives in
- * src/test. testDebug still runs it under testDebugUnitTest.
+ * The antimeridian sample exists only in src/debug. [DebugDemoStorms.extra] is an
+ * empty list in release, so this check lives in src/testDebug (#38) instead of
+ * calling `.single()` from the shared unit-test source set.
  */
-class DebugDemoStormTrackTest {
+class TrackGeometryDebugTest {
 
     @Test
     fun debugDemoStorm_crossesAntimeridian() {
@@ -20,7 +20,10 @@ class DebugDemoStormTrackTest {
         val lngs = (storm.points + storm.forecastPoints).map { it.lng }
         assertTrue(lngs.any { it > 170.0 } && lngs.any { it < -170.0 + 1e-9 })
         val ref = storm.points.last().lng
-        val all = unwrapTrack((storm.points + storm.forecastPoints).map { GeoPoint(it.lat, it.lng) }, ref)
+        val all = unwrapTrack(
+            (storm.points + storm.forecastPoints).map { GeoPoint(it.lat, it.lng) },
+            ref
+        )
         assertContinuous(all.map { it.lng })
     }
 
