@@ -337,6 +337,8 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.activity.compose)
+    // #38: debug only. releaseImplementation would merge an exported test
+    // ComponentActivity into the release APK. Compose UI tests live in src/testDebug.
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

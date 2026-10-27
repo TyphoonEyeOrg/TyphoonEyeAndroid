@@ -30,6 +30,12 @@ import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
 /**
  * Material 3 UI/UX checks on JVM via Robolectric (reliable without device unlock).
+ *
+ * #38: lives in testDebug. [createComposeRule] needs the ComponentActivity that
+ * `androidx.compose.ui:ui-test-manifest` merges in, and that dependency is
+ * debugImplementation only (since before #30) so the release APK does not ship
+ * the test activity. Release unit tests therefore do not compile this class;
+ * testDebugUnitTest still does.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "zh-rCN")
