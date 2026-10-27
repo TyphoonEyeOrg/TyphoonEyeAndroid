@@ -21,7 +21,12 @@ import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
-/** English UI for the no-key (F-Droid) path and the demo-mode banner. */
+/**
+ * English UI for the no-key (F-Droid) path and the demo-mode banner.
+ *
+ * src/testDebug only (#38), same `ComponentActivity` / `ui-test-manifest` constraint
+ * as [UiUxComposeTest].
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "en")
 class NoDataSourceComposeTest {

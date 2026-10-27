@@ -3,7 +3,6 @@ package seamain.org.typhoonEye
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import seamain.org.typhoonEye.ui.DebugDemoStorms
 import seamain.org.typhoonEye.ui.util.GeoPoint
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.trackReferenceLng
@@ -12,7 +11,10 @@ import seamain.org.typhoonEye.ui.util.unwrapTrack
 import seamain.org.typhoonEye.ui.util.windCircleRing
 import kotlin.math.abs
 
-/** #14 / TYP-55: rendered geometry stays continuous across 180°. */
+/**
+ * #14 / TYP-55: rendered geometry stays continuous across 180°.
+ * The debug demo storm is covered by [TrackGeometryDebugTest] in src/testDebug (#38).
+ */
 class TrackGeometryTest {
 
     private val eps = 1e-9
@@ -85,16 +87,5 @@ class TrackGeometryTest {
         val track = listOf(GeoPoint(20.0, 178.0), GeoPoint(21.0, -179.0))
         assertEquals(track, unwrapTrack(track, null))
         assertEquals(null, trackReferenceLng(emptyList(), emptyList()))
-    }
-
-    @Test
-    fun debugDemoStorm_crossesAntimeridian() {
-        // Unit tests run against the debug source set, where the sample exists.
-        val storm = DebugDemoStorms.extra().single()
-        val lngs = (storm.points + storm.forecastPoints).map { it.lng }
-        assertTrue(lngs.any { it > 170.0 } && lngs.any { it < -170.0 + 1e-9 })
-        val ref = storm.points.last().lng
-        val all = unwrapTrack((storm.points + storm.forecastPoints).map { GeoPoint(it.lat, it.lng) }, ref)
-        assertContinuous(all.map { it.lng })
     }
 }
