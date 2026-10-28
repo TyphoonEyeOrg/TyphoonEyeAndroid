@@ -18,6 +18,8 @@ import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
 import seamain.org.typhoonEye.data.api.RelayAlertsApi
+import seamain.org.typhoonEye.data.api.RelayHeaderCapture
+import seamain.org.typhoonEye.data.api.RelayHeaderInterceptor
 import seamain.org.typhoonEye.data.api.redactingLoggingInterceptor
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
@@ -77,8 +79,10 @@ object NetworkModule {
     @Singleton
     @Named("juhe")
     fun provideJuheOkHttp(
-        @Named("logging") logging: HttpLoggingInterceptor
+        @Named("logging") logging: HttpLoggingInterceptor,
+        relayHeaders: RelayHeaderCapture
     ): OkHttpClient = baseOkHttpBuilder()
+        .addInterceptor(RelayHeaderInterceptor(relayHeaders))
         .addInterceptor(logging)
         .build()
 
@@ -112,12 +116,14 @@ object NetworkModule {
     fun provideQWeatherOkHttp(
         auth: QWeatherAuthInterceptor,
         config: DataSourceConfig,
-        @Named("logging") logging: HttpLoggingInterceptor
+        @Named("logging") logging: HttpLoggingInterceptor,
+        relayHeaders: RelayHeaderCapture
     ): OkHttpClient = baseOkHttpBuilder()
         .apply {
             // The relay authenticates upstream; the F-Droid build sends no auth header.
             if (!config.viaRelay) addInterceptor(auth)
         }
+        .addInterceptor(RelayHeaderInterceptor(relayHeaders))
         .addInterceptor(logging)
         .build()
 

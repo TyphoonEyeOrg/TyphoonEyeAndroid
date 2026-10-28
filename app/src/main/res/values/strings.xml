@@ -277,6 +277,8 @@
     <string name="source_failure_quota">%1$s: quota exceeded</string>
     <string name="source_failure_api">%1$s: service error (%2$s)</string>
     <string name="source_failure_network">%1$s: network request failed</string>
+    <string name="source_failure_relay_busy">The shared data service is busy. Saved data is shown if we have it.</string>
+    <string name="source_failure_relay_daily_quota">The shared data service has reached its daily limit. Saved data is shown if we have it.</string>
     <string name="demo_bavi_position">About 890 km southeast of the Zhejiang–Fujian border (sample)</string>
     <string name="demo_bavi_forecast">Sample forecast: moving northwest at 20–25 km/h with little change in intensity.</string>
     <string name="demo_mekkhala_position">Over the sea east of the Philippines (sample)</string>

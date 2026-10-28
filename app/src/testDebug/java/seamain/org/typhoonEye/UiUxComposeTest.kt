@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertTrue
@@ -184,6 +185,102 @@ class UiUxComposeTest {
         composeRule.onNodeWithText("重试").assertIsDisplayed()
         // Real failures also offer demo data now (F-Droid review !45561).
         composeRule.onNodeWithText("查看演示数据").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_cachedFeed_showsCachedChipNotLive() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(412.dp, 915.dp)) {
+                TyphoonEyeTheme {
+                    HomeScreen(
+                        uiState = TyphoonUiState.Success(sampleTyphoons, fromCache = true),
+                        filteredTyphoons = sampleTyphoons,
+                        isRefreshing = false,
+                        query = "",
+                        intensityFilter = null,
+                        dataMode = DataMode.Live,
+                        lastUpdated = null,
+                        onQueryChange = {},
+                        onFilterChange = {},
+                        onRefresh = {},
+                        onLoadDemo = {},
+                        onOpenSettings = {},
+                        onTyphoonClick = {},
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("本地缓存").assertIsDisplayed()
+        composeRule.onNodeWithText("实时数据").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeScreen_liveFeed_showsLiveChipNotCached() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(412.dp, 915.dp)) {
+                TyphoonEyeTheme {
+                    HomeScreen(
+                        uiState = TyphoonUiState.Success(sampleTyphoons, fromCache = false),
+                        filteredTyphoons = sampleTyphoons,
+                        isRefreshing = false,
+                        query = "",
+                        intensityFilter = null,
+                        dataMode = DataMode.Live,
+                        lastUpdated = null,
+                        onQueryChange = {},
+                        onFilterChange = {},
+                        onRefresh = {},
+                        onLoadDemo = {},
+                        onOpenSettings = {},
+                        onTyphoonClick = {},
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("实时数据").assertIsDisplayed()
+        composeRule.onNodeWithText("本地缓存").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeScreen_relay429And503_showCalmCopy() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(412.dp, 915.dp)) {
+                TyphoonEyeTheme {
+                    HomeScreen(
+                        uiState = TyphoonUiState.Error(
+                            failures = listOf(
+                                SourceFailure(DataSource.Juhe, SourceFailureKind.RelayBusy, code = "429"),
+                                SourceFailure(DataSource.QWeather, SourceFailureKind.RelayDailyQuota, code = "503")
+                            )
+                        ),
+                        filteredTyphoons = emptyList(),
+                        isRefreshing = false,
+                        query = "",
+                        intensityFilter = null,
+                        dataMode = DataMode.Live,
+                        lastUpdated = null,
+                        onQueryChange = {},
+                        onFilterChange = {},
+                        onRefresh = {},
+                        onLoadDemo = {},
+                        onOpenSettings = {},
+                        onTyphoonClick = {},
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("共享数据服务正忙。有已保存的数据时仍会显示。", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("共享数据服务今日额度已用完。有已保存的数据时仍会显示。", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

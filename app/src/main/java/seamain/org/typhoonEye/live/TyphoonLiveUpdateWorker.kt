@@ -18,6 +18,8 @@ import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
 import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.TyphoonDataError
+import seamain.org.typhoonEye.domain.model.retryAfterStillActive
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
 import java.util.concurrent.TimeUnit
@@ -90,24 +92,36 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             }
             // A direct-mode build without any API key can never succeed remotely: don't back
             // off and retry for it, just wait for the next period.
+            // A relay Retry-After still in the future must not schedule the 15-minute backoff
+            // either; the repository also refuses the socket until that header expires.
             val failure = result.exceptionOrNull() ?: result.getOrNull()?.staleReason
             val remoteFailed = failure != null && failure !is NoDataSourceConfiguredError
-            retryOrSucceed(remoteFailed)
+            val waiting = (failure as? TyphoonDataError)
+                ?.retryAfterStillActive(System.currentTimeMillis()) == true
+            finish(remoteFailed, waiting)
         } catch (e: Exception) {
             Log.e(TAG, "Worker error", e)
-            retryOrSucceed(failed = true)
+            finish(remoteFailed = true)
         }
     }
 
     /**
      * Failed network refresh → exponential backoff retry (15 min, 30 min, 60 min…), capped so a
      * long outage falls back to the normal 60-minute period instead of retrying forever.
+     * While `Retry-After` is active this returns success so WorkManager does not hard-retry early.
      */
-    private fun retryOrSucceed(failed: Boolean): Result = when {
-        !failed -> Result.success()
-        runAttemptCount < MAX_RETRIES -> Result.retry()
-        else -> Result.success()
-    }
+    private fun finish(remoteFailed: Boolean, retryAfterStillActive: Boolean = false): Result =
+        when (
+            decideLiveUpdateAttempt(
+                remoteFailed = remoteFailed,
+                retryAfterStillActive = retryAfterStillActive,
+                runAttemptCount = runAttemptCount,
+                maxRetries = MAX_RETRIES
+            )
+        ) {
+            LiveUpdateAttempt.Succeed -> Result.success()
+            LiveUpdateAttempt.Retry -> Result.retry()
+        }
 
     companion object {
         private const val TAG = "TyphoonLiveWorker"

@@ -25,13 +25,13 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import retrofit2.HttpException
 import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherWarningApi
 import seamain.org.typhoonEye.data.api.RelayAlertsApi
+import seamain.org.typhoonEye.data.api.RelayHeaderCapture
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
 import seamain.org.typhoonEye.data.model.JuheActiveListResult
@@ -42,7 +42,6 @@ import seamain.org.typhoonEye.data.model.RelayAlertPoint
 import seamain.org.typhoonEye.data.model.RelayAlertsResponse
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
 import seamain.org.typhoonEye.data.repository.DefaultWarningRepository
-import seamain.org.typhoonEye.data.sync.FeedSyncStore
 import seamain.org.typhoonEye.di.NetworkModule
 import seamain.org.typhoonEye.domain.model.DataSource
 import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
@@ -130,8 +129,9 @@ class RelayModeTest {
         val logging = HttpLoggingInterceptor()
         // A QWeather key is present on purpose: relay mode must not attach it.
         val auth = QWeatherAuthInterceptor(apiKey = "QW-SECRET")
-        val qClient = NetworkModule.provideQWeatherOkHttp(auth, relayConfig, logging)
-            .newBuilder().addInterceptor(capture).build()
+        val qClient = NetworkModule.provideQWeatherOkHttp(
+            auth, relayConfig, logging, RelayHeaderCapture()
+        ).newBuilder().addInterceptor(capture).build()
         val plainClient = OkHttpClient.Builder().addInterceptor(capture).build()
 
         val juhe = NetworkModule.provideJuheTyphoonApi(
@@ -173,8 +173,6 @@ class RelayModeTest {
 
     // region Repository in relay mode
 
-    private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
-
     private fun relayRepo(juheApi: JuheTyphoonApi, qWeatherApi: QWeatherTyphoonApi): DefaultTyphoonRepository {
         val local: TyphoonLocalDataSource = mock()
         return DefaultTyphoonRepository(
@@ -182,8 +180,9 @@ class RelayModeTest {
             qWeatherApi = qWeatherApi,
             config = relayConfig,
             localDataSource = local,
-            syncStore = FakeSyncStore(),
-            clock = WallClock { 1_000_000L }
+            syncStore = MemoryFeedSyncStore(),
+            clock = WallClock { 1_000_000L },
+            relayHeaders = RelayHeaderCapture()
         )
     }
 
@@ -229,20 +228,16 @@ class RelayModeTest {
     fun relayRepo_rateLimitAndOffline_areTyped() = runTest {
         val juheApi: JuheTyphoonApi = mock()
         val qWeatherApi: QWeatherTyphoonApi = mock()
-        val tooMany = HttpException(
-            retrofit2.Response.error<Any>(
-                429,
-                """{"error":"rate_limited"}""".toResponseBody("application/json".toMediaType())
-            )
-        )
+        val tooMany = relayHttpException(429, retryAfter = "30")
         whenever(juheApi.getActiveTyphoons(anyOrNull())).thenAnswer { throw tooMany }
         whenever(qWeatherApi.getStormList(any(), any())).thenAnswer { throw IOException("offline") }
 
         val failures = (relayRepo(juheApi, qWeatherApi).getActiveTyphoons().exceptionOrNull()
             as DataSourcesFailedError).failures
 
-        assertEquals(SourceFailureKind.QuotaExceeded, failures[0].kind)
+        assertEquals(SourceFailureKind.RelayBusy, failures[0].kind)
         assertEquals("429", failures[0].code)
+        assertEquals(1_000_000L + 30_000L, failures[0].retryAfterEpochMs)
         assertEquals(SourceFailureKind.Network, failures[1].kind)
     }
 

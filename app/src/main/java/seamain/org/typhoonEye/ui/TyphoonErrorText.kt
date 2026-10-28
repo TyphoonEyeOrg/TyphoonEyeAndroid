@@ -24,6 +24,8 @@ fun SourceFailure.localized(context: Context): String {
     return when (kind) {
         SourceFailureKind.InvalidKey -> context.getString(R.string.source_failure_invalid_key, name)
         SourceFailureKind.QuotaExceeded -> context.getString(R.string.source_failure_quota, name)
+        SourceFailureKind.RelayBusy -> context.getString(R.string.source_failure_relay_busy)
+        SourceFailureKind.RelayDailyQuota -> context.getString(R.string.source_failure_relay_daily_quota)
         SourceFailureKind.ApiError -> context.getString(
             R.string.source_failure_api,
             name,
@@ -33,9 +35,15 @@ fun SourceFailure.localized(context: Context): String {
     }
 }
 
-/** One line per failed source, or null when there is nothing specific to say. */
+/**
+ * One line per failed source, or null when there is nothing specific to say.
+ * Identical relay copy (both sources busy, or both at the daily limit) is shown once.
+ */
 fun List<SourceFailure>.localizedDetails(context: Context): String? =
-    takeIf { it.isNotEmpty() }?.joinToString("\n") { it.localized(context) }
+    takeIf { it.isNotEmpty() }
+        ?.map { it.localized(context) }
+        ?.distinct()
+        ?.joinToString("\n")
 
 /** Short localized explanation for a stale-cache banner or error body. */
 fun TyphoonDataError.localizedMessage(context: Context): String = when (this) {

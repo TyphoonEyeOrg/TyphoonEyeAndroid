@@ -17,6 +17,8 @@ import org.mockito.kotlin.whenever
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
+import seamain.org.typhoonEye.data.api.RelayHeaderCapture
+import seamain.org.typhoonEye.data.api.RelayHeaders
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
 import seamain.org.typhoonEye.data.model.JuheActiveListResult
@@ -31,7 +33,6 @@ import seamain.org.typhoonEye.data.model.QWeatherStormListResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
-import seamain.org.typhoonEye.data.sync.FeedSyncStore
 import seamain.org.typhoonEye.domain.model.DataSource
 import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
 import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
@@ -48,11 +49,10 @@ class TyphoonRepositoryTest {
     private lateinit var localDataSource: TyphoonLocalDataSource
     private lateinit var repository: DefaultTyphoonRepository
     private val juheKey = "juhe_key"
-    private lateinit var syncStore: FakeSyncStore
+    private lateinit var syncStore: MemoryFeedSyncStore
+    private lateinit var relayHeaders: RelayHeaderCapture
     private var nowMs: Long = 0L
     private val clock = WallClock { nowMs }
-
-    private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
 
     private fun direct(juheKey: String, qWeatherConfigured: Boolean) =
         DataSourceConfig(juheKey = juheKey, qWeatherDirectConfigured = qWeatherConfigured)
@@ -62,7 +62,8 @@ class TyphoonRepositoryTest {
         juheApi = mock()
         qWeatherApi = mock()
         localDataSource = mock()
-        syncStore = FakeSyncStore()
+        syncStore = MemoryFeedSyncStore()
+        relayHeaders = RelayHeaderCapture()
         // 2026-07-10 15:00 Beijing — one hour after the fixtures' latest observation.
         nowMs = TyphoonActivity.parseEpochMs("2026-07-10 15:00:00")!!
         repository = DefaultTyphoonRepository(
@@ -71,7 +72,8 @@ class TyphoonRepositoryTest {
             config = direct(juheKey, qWeatherConfigured = true),
             localDataSource = localDataSource,
             syncStore = syncStore,
-            clock = clock
+            clock = clock,
+            relayHeaders = relayHeaders
         )
     }
 
@@ -222,7 +224,8 @@ class TyphoonRepositoryTest {
         config = direct(juheKey, qWeatherConfigured),
         localDataSource = localDataSource,
         syncStore = syncStore,
-        clock = clock
+        clock = clock,
+        relayHeaders = relayHeaders
     )
 
     @Test
@@ -626,4 +629,80 @@ class TyphoonRepositoryTest {
     }
 
     // endregion
+
+    @Test
+    fun `retry after suppresses another refresh until it expires`() = runTest {
+        val started = nowMs
+        val limited = relayHttpException(503, retryAfter = "3600")
+        whenever(juheApi.getActiveTyphoons(any())).thenThrow(limited)
+        whenever(qWeatherApi.getStormList(any(), any())).thenThrow(limited)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
+        val first = repository.getActiveTyphoons(forceRefresh = true)
+        val failures = (first.exceptionOrNull() as DataSourcesFailedError).failures
+        assertEquals(
+            listOf(SourceFailureKind.RelayDailyQuota, SourceFailureKind.RelayDailyQuota),
+            failures.map { it.kind }
+        )
+        assertEquals(started + 3_600_000L, failures[0].retryAfterEpochMs)
+        assertEquals("503", syncStore.relayThrottleHttpCode(DataSource.Juhe))
+
+        // Past the 60s force-refresh floor, still inside Retry-After: no second socket.
+        nowMs = started + 90_000L
+        repository.getActiveTyphoons(forceRefresh = true)
+        verify(juheApi, times(1)).getActiveTyphoons(any())
+        verify(qWeatherApi, times(1)).getStormList(any(), any())
+
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(
+            JuheActiveListResponse(
+                reason = "success",
+                errorCode = 0,
+                result = JuheActiveListResult(emptyList())
+            )
+        )
+        nowMs = started + 3_600_000L + 1
+        assertTrue(repository.getActiveTyphoons(forceRefresh = true).isSuccess)
+        verify(juheApi, times(2)).getActiveTyphoons(any())
+    }
+
+    @Test
+    fun `juhe retry after does not block qweather`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenThrow(relayHttpException(429, retryAfter = "600"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(QWeatherStormListResponse(code = "200"))
+
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        nowMs += 61_000L
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        verify(juheApi, times(1)).getActiveTyphoons(any())
+        verify(qWeatherApi, times(2)).getStormList(any(), any())
+    }
+
+    @Test
+    fun `x relay stale is cached data not a live fetch`() = runTest {
+        relayHeaders.record(
+            encodedPath = "/v1/juhe/${RelayHeaders.JUHE_ACTIVE_SUFFIX}",
+            stale = true,
+            retryAfter = null
+        )
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(
+                reason = "success",
+                errorCode = 0,
+                result = JuheActiveListResult(
+                    data = listOf(JuheActiveTyphoon(tfid = "202609", name = "巴威", enname = "BAVI"))
+                )
+            )
+        )
+        whenever(juheApi.getTyphoonDetail(any(), any())).thenReturn(
+            JuheDetailResponse(reason = "missing", errorCode = 1, result = null)
+        )
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.fromCache)
+        assertNull(feed.staleReason)
+        assertEquals("巴威", feed.typhoons.single().name)
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
 }
