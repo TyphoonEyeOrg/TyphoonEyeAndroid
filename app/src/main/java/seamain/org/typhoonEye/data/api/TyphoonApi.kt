@@ -1,5 +1,6 @@
 package seamain.org.typhoonEye.data.api
 
+import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -20,14 +21,14 @@ interface JuheTyphoonApi {
     @GET("fapigw/typhoon/active")
     suspend fun getActiveTyphoons(
         @Query("key") apiKey: String
-    ): JuheActiveListResponse
+    ): Response<JuheActiveListResponse>
 
     /** 指定台风实时路径与预报 */
     @GET("fapigw/typhoon/detail")
     suspend fun getTyphoonDetail(
         @Query("key") apiKey: String,
         @Query("tfid") typhoonId: String
-    ): JuheDetailResponse
+    ): Response<JuheDetailResponse>
 }
 
 /**
@@ -44,19 +45,19 @@ interface QWeatherTyphoonApi {
     suspend fun getStormList(
         @Query("basin") basin: String = "NP",
         @Query("year") year: String
-    ): QWeatherStormListResponse
+    ): Response<QWeatherStormListResponse>
 
     /** 台风实况路径 */
     @GET("v7/tropical/storm-track")
     suspend fun getStormTrack(
         @Query("stormid") stormId: String
-    ): QWeatherStormTrackResponse
+    ): Response<QWeatherStormTrackResponse>
 
     /** 台风预报路径 */
     @GET("v7/tropical/storm-forecast")
     suspend fun getStormForecast(
         @Query("stormid") stormId: String
-    ): QWeatherStormForecastResponse
+    ): Response<QWeatherStormForecastResponse>
 }
 
 /**

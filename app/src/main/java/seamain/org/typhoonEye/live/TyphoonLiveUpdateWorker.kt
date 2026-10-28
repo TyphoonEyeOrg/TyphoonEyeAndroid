@@ -16,6 +16,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
+import seamain.org.typhoonEye.domain.model.RelayLimitedException
 import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
@@ -87,27 +88,33 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             result.onFailure { err ->
                 Log.w(TAG, "Background refresh failed: ${err.message}")
             }
+            val retryUntil = result.getOrNull()?.retryAfterUntilEpochMs
+                ?: (result.exceptionOrNull() as? RelayLimitedException)?.retryAfterUntilEpochMs
             val remoteFailed = result.isFailure || result.getOrNull()?.staleMessage != null
-            retryOrSucceed(remoteFailed)
+            if (
+                shouldHardRetryLiveUpdate(
+                    runAttemptCount = runAttemptCount,
+                    remoteFailed = remoteFailed,
+                    retryAfterUntilMs = retryUntil,
+                    nowMs = System.currentTimeMillis()
+                )
+            ) {
+                Result.retry()
+            } else {
+                if (retryUntil != null && System.currentTimeMillis() < retryUntil) {
+                    Log.i(TAG, "Relay Retry-After active until $retryUntil; not retrying early")
+                }
+                Result.success()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Worker error", e)
-            retryOrSucceed(failed = true)
+            if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.success()
         }
-    }
-
-    /**
-     * Failed network refresh → exponential backoff retry (15 min, 30 min, 60 min…), capped so a
-     * long outage falls back to the normal 60-minute period instead of retrying forever.
-     */
-    private fun retryOrSucceed(failed: Boolean): Result = when {
-        !failed -> Result.success()
-        runAttemptCount < MAX_RETRIES -> Result.retry()
-        else -> Result.success()
     }
 
     companion object {
         private const val TAG = "TyphoonLiveWorker"
-        private const val MAX_RETRIES = 3
+        internal const val MAX_RETRIES = 3
         const val PERIOD_MINUTES = 60L
         const val BACKOFF_MINUTES = 15L
 
@@ -145,4 +152,21 @@ class TyphoonLiveUpdateWorker @AssistedInject constructor(
             workManager.cancelUniqueWork(LEGACY_UNIQUE_WORK)
         }
     }
+}
+
+/**
+ * WorkManager retry while a relay `Retry-After` is still in the future would hit the
+ * network again before the relay asked us to. Suppress that; the periodic schedule
+ * and pull-to-refresh both consult the same deadline.
+ */
+internal fun shouldHardRetryLiveUpdate(
+    runAttemptCount: Int,
+    remoteFailed: Boolean,
+    retryAfterUntilMs: Long?,
+    nowMs: Long,
+    maxRetries: Int = TyphoonLiveUpdateWorker.MAX_RETRIES
+): Boolean {
+    if (retryAfterUntilMs != null && nowMs < retryAfterUntilMs) return false
+    if (!remoteFailed) return false
+    return runAttemptCount < maxRetries
 }

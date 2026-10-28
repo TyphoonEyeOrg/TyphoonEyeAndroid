@@ -6,6 +6,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import okhttp3.Headers
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import retrofit2.Response
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
@@ -38,10 +44,15 @@ import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
 import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.domain.model.RelayLimitKind
+import seamain.org.typhoonEye.domain.model.RelayLimitedException
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
+import seamain.org.typhoonEye.ui.DataMode
+import seamain.org.typhoonEye.ui.SummarySourceChip
+import seamain.org.typhoonEye.ui.summarySourceChips
 
 class TyphoonRepositoryTest {
 
@@ -54,7 +65,11 @@ class TyphoonRepositoryTest {
     private var nowMs: Long = 0L
     private val clock = WallClock { nowMs }
 
-    private class FakeSyncStore(override var lastListFetchAtMs: Long? = null) : FeedSyncStore
+    private class FakeSyncStore(
+        override var lastListFetchAtMs: Long? = null,
+        override var relayRetryAfterUntilMs: Long? = null,
+        override var relayLimit: RelayLimitKind? = null
+    ) : FeedSyncStore
 
     private fun auth(configured: Boolean = true): QWeatherAuthInterceptor =
         if (configured) {
@@ -84,7 +99,7 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `getActiveTyphoons should return Juhe data when successful`() = runTest {
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(
                 reason = "success",
                 errorCode = 0,
@@ -104,8 +119,8 @@ class TyphoonRepositoryTest {
                     )
                 )
             )
-        )
-        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609"))).thenReturn(
+        ))
+        whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609"))).thenReturn(httpOk(
             JuheDetailResponse(
                 reason = "success",
                 errorCode = 0,
@@ -129,7 +144,7 @@ class TyphoonRepositoryTest {
                     )
                 )
             )
-        )
+        ))
 
         val result = repository.getActiveTyphoons()
 
@@ -147,10 +162,10 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `getActiveTyphoons should fallback to QWeather when Juhe limit reached`() = runTest {
-        whenever(juheApi.getActiveTyphoons(any())).thenReturn(
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
             JuheActiveListResponse(reason = "limit reached", errorCode = 10012, result = null)
-        )
-        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(
+        ))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
             QWeatherStormListResponse(
                 code = "200",
                 storm = listOf(
@@ -168,8 +183,8 @@ class TyphoonRepositoryTest {
                     )
                 )
             )
-        )
-        whenever(qWeatherApi.getStormTrack("NP_2609")).thenReturn(
+        ))
+        whenever(qWeatherApi.getStormTrack("NP_2609")).thenReturn(httpOk(
             QWeatherStormTrackResponse(
                 code = "200",
                 isActive = "1",
@@ -186,10 +201,10 @@ class TyphoonRepositoryTest {
                     )
                 )
             )
-        )
-        whenever(qWeatherApi.getStormForecast("NP_2609")).thenReturn(
+        ))
+        whenever(qWeatherApi.getStormForecast("NP_2609")).thenReturn(httpOk(
             QWeatherStormForecastResponse(code = "200", forecast = emptyList())
-        )
+        ))
 
         val result = repository.getActiveTyphoons()
 
@@ -206,13 +221,13 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `getActiveTyphoons returns empty list when Juhe has no active typhoons`() = runTest {
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(
                 reason = "success",
                 errorCode = 0,
                 result = JuheActiveListResult(data = emptyList())
             )
-        )
+        ))
 
         val result = repository.getActiveTyphoons()
 
@@ -247,12 +262,12 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `getActiveTyphoons falls back when Juhe key invalid 10001`() = runTest {
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(reason = "错误的请求KEY", errorCode = 10001, result = null)
-        )
-        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(
+        ))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
             QWeatherStormListResponse(code = "200", storm = emptyList())
-        )
+        ))
 
         val result = repository.getActiveTyphoons()
 
@@ -327,18 +342,39 @@ class TyphoonRepositoryTest {
         strong = "台风"
     )
 
-    private fun juheDetail(tfid: String, vararg times: String) = JuheDetailResponse(
-        reason = "success",
-        errorCode = 0,
-        result = JuheDetailResult(
-            data = JuheDetailData(
-                tfid = tfid,
-                name = "巴威",
-                enname = "BAVI",
-                strong = "台风",
-                points = times.map {
-                    JuheTrackPoint(time = it, lat = "21.8", lng = "126.9", speed = "40", pressure = "960")
-                }
+    private fun <T> httpOk(body: T, vararg headerPairs: String): Response<T> =
+        if (headerPairs.isEmpty()) {
+            Response.success(body)
+        } else {
+            Response.success(body, Headers.headersOf(*headerPairs))
+        }
+
+    private fun <T> httpError(code: Int, retryAfter: String? = null): Response<T> {
+        val raw = okhttp3.Response.Builder()
+            .request(Request.Builder().url("https://te-relay.seamain.org/v1/juhe/").build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message("error")
+            .apply { if (retryAfter != null) header("Retry-After", retryAfter) }
+            .body("{}".toResponseBody("application/json".toMediaType()))
+            .build()
+        return Response.error("{}".toResponseBody("application/json".toMediaType()), raw)
+    }
+
+    private fun juheDetail(tfid: String, vararg times: String) = httpOk(
+        JuheDetailResponse(
+            reason = "success",
+            errorCode = 0,
+            result = JuheDetailResult(
+                data = JuheDetailData(
+                    tfid = tfid,
+                    name = "巴威",
+                    enname = "BAVI",
+                    strong = "台风",
+                    points = times.map {
+                        JuheTrackPoint(time = it, lat = "21.8", lng = "126.9", speed = "40", pressure = "960")
+                    }
+                )
             )
         )
     )
@@ -373,9 +409,9 @@ class TyphoonRepositoryTest {
     @Test
     fun `stale list after 10 minutes fetches and records fetch time`() = runTest {
         syncStore.lastListFetchAtMs = nowMs - 11 * listMinute
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
-        )
+        ))
 
         val feed = repository.getActiveTyphoons().getOrThrow()
 
@@ -409,9 +445,9 @@ class TyphoonRepositoryTest {
     @Test
     fun `force refresh after 60 seconds bypasses the 10 minute TTL`() = runTest {
         syncStore.lastListFetchAtMs = nowMs - 2 * listMinute
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
-        )
+        ))
 
         val feed = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
 
@@ -424,7 +460,7 @@ class TyphoonRepositoryTest {
         whenever(localDataSource.getAll()).thenReturn(
             listOf(fullCached("202609", "2026-07-10 14:00:00"), fullCached("202610", "2026-07-10 08:00:00"))
         )
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(
                 reason = "success",
                 errorCode = 0,
@@ -436,7 +472,7 @@ class TyphoonRepositoryTest {
                     )
                 )
             )
-        )
+        ))
         whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202610")))
             .thenReturn(juheDetail("202610", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
         whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202611")))
@@ -457,13 +493,13 @@ class TyphoonRepositoryTest {
     fun `list-only snapshot in cache does not suppress the detail fetch`() = runTest {
         val thin = fullCached("202609", "2026-07-10 14:00:00").let { it.copy(points = it.points.take(1)) }
         whenever(localDataSource.getAll()).thenReturn(listOf(thin))
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(
                 reason = "success",
                 errorCode = 0,
                 result = JuheActiveListResult(listOf(juheInfo("202609", "2026-07-10 14:00:00")))
             )
-        )
+        ))
         whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609")))
             .thenReturn(juheDetail("202609", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
 
@@ -474,7 +510,7 @@ class TyphoonRepositoryTest {
 
     @Test
     fun `remote storm without observation for over 24h is reported dissipated`() = runTest {
-        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(
                 reason = "success",
                 errorCode = 0,
@@ -482,7 +518,7 @@ class TyphoonRepositoryTest {
                     listOf(juheInfo("202609", "2026-07-10 14:00:00"), juheInfo("2026D07", "2026-07-09 14:00:00"))
                 )
             )
-        )
+        ))
         whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("202609")))
             .thenReturn(juheDetail("202609", "2026-07-10 08:00:00", "2026-07-10 14:00:00"))
         whenever(juheApi.getTyphoonDetail(eq(juheKey), eq("2026D07")))
@@ -550,9 +586,9 @@ class TyphoonRepositoryTest {
     @Test
     fun `cancelled cache read propagates instead of looking like an empty list`() = runTest {
         whenever(localDataSource.getAll()).thenThrow(CancellationException("cancelled"))
-        whenever(juheApi.getActiveTyphoons(any())).thenReturn(
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
             JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult())
-        )
+        ))
 
         try {
             repository.getActiveTyphoons()
@@ -581,19 +617,19 @@ class TyphoonRepositoryTest {
         val entered = CompletableDeferred<Unit>()
         val juhe = object : JuheTyphoonApi {
             var calls = 0
-            override suspend fun getActiveTyphoons(apiKey: String): JuheActiveListResponse {
+            override suspend fun getActiveTyphoons(apiKey: String): Response<JuheActiveListResponse> {
                 calls++
                 if (calls == 1) {
                     entered.complete(Unit)
                     awaitCancellation()
                 }
-                return JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult())
+                return httpOk(JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult()))
             }
 
             override suspend fun getTyphoonDetail(
                 apiKey: String,
                 typhoonId: String
-            ): JuheDetailResponse = error("unused")
+            ): Response<JuheDetailResponse> = error("unused")
         }
         whenever(localDataSource.getAll()).thenReturn(emptyList())
         val repo = DefaultTyphoonRepository(
@@ -623,6 +659,143 @@ class TyphoonRepositoryTest {
         } catch (_: CancellationException) {
             // expected: the lock was released by propagating cancellation
         }
+    }
+
+    @Test
+    fun `429 with Retry-After serves cache and blocks a second refresh`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(429, "120"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpError(429, "90"))
+
+        val feed = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        assertEquals(RelayLimitKind.Busy, feed.relayLimit)
+        assertTrue(feed.fromCache)
+        assertNull(feed.staleMessage)
+        assertEquals(nowMs + 120_000, feed.retryAfterUntilEpochMs)
+        assertEquals(nowMs + 120_000, syncStore.relayRetryAfterUntilMs)
+        assertEquals(
+            setOf(SummarySourceChip.Cached),
+            summarySourceChips(fromCache = true, dataMode = DataMode.Live)
+        )
+
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        verify(juheApi, times(1)).getActiveTyphoons(any())
+        verify(qWeatherApi, times(1)).getStormList(any(), any())
+    }
+
+    @Test
+    fun `503 with Retry-After is the daily limit and outlasts a shorter 429`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(429, "60"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpError(503, "7200"))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertEquals(RelayLimitKind.DailyQuotaExhausted, feed.relayLimit)
+        assertEquals(nowMs + 7_200_000, feed.retryAfterUntilEpochMs)
+        assertTrue(feed.fromCache)
+    }
+
+    @Test
+    fun `expired Retry-After allows the next force refresh`() = runTest {
+        syncStore.relayRetryAfterUntilMs = nowMs - 1_000
+        syncStore.relayLimit = RelayLimitKind.Busy
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
+        ))
+
+        val feed = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        assertFalse(feed.fromCache)
+        assertNull(feed.relayLimit)
+        assertNull(syncStore.relayRetryAfterUntilMs)
+        verify(juheApi).getActiveTyphoons(juheKey)
+    }
+
+    @Test
+    fun `fresh fallback clears a Retry-After recorded by the source that failed`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(429, "3600"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
+            QWeatherStormListResponse(code = "200", storm = emptyList())
+        ))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertFalse(feed.fromCache)
+        assertNull(feed.relayLimit)
+        assertNull(syncStore.relayRetryAfterUntilMs)
+        verify(qWeatherApi).getStormList(any(), any())
+    }
+
+    @Test
+    fun `X-Relay-Stale marks the list cached instead of live`() = runTest {
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            httpOk(
+                JuheActiveListResponse(
+                    reason = "success",
+                    errorCode = 0,
+                    result = JuheActiveListResult(emptyList())
+                ),
+                "X-Relay-Stale",
+                "1"
+            )
+        )
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.fromCache)
+        assertNull(feed.staleMessage)
+        assertNull(feed.relayLimit)
+        assertEquals(
+            setOf(SummarySourceChip.Cached),
+            summarySourceChips(feed.fromCache, DataMode.Live)
+        )
+        assertFalse(summarySourceChips(feed.fromCache, DataMode.Live).contains(SummarySourceChip.Live))
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
+
+    @Test
+    fun `404 is not a relay limit and does not throttle the next refresh`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(404))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpError(404))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertNull(feed.relayLimit)
+        assertNull(feed.retryAfterUntilEpochMs)
+        assertTrue(feed.staleMessage?.contains("404") == true)
+        assertNull(syncStore.relayRetryAfterUntilMs)
+    }
+
+    @Test
+    fun `429 with no cache fails as relay busy and still records Retry-After`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(429, "60"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpError(429, "60"))
+
+        val error = repository.getActiveTyphoons().exceptionOrNull()
+
+        assertTrue(error is RelayLimitedException)
+        val limited = error as RelayLimitedException
+        assertEquals(RelayLimitKind.Busy, limited.kind)
+        assertEquals(nowMs + 60_000, limited.retryAfterUntilEpochMs)
+        assertEquals(nowMs + 60_000, syncStore.relayRetryAfterUntilMs)
+    }
+
+    @Test
+    fun `detail fetch honors Retry-After instead of calling the network`() = runTest {
+        syncStore.relayRetryAfterUntilMs = nowMs + 60_000
+        syncStore.relayLimit = RelayLimitKind.DailyQuotaExhausted
+        whenever(localDataSource.getById("202609")).thenReturn(fullCached("202609", "2026-07-10 14:00:00"))
+        whenever(localDataSource.getCachedAtMs("202609")).thenReturn(nowMs - 31 * listMinute)
+
+        val result = repository.getTyphoonDetail("202609")
+
+        assertTrue(result.isSuccess)
+        verify(juheApi, never()).getTyphoonDetail(any(), any())
+        verify(qWeatherApi, never()).getStormTrack(any())
     }
 
     // endregion

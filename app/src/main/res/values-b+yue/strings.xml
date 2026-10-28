@@ -32,6 +32,10 @@
     <string name="data_live">即時資料</string>
     <string name="data_demo">示範資料</string>
     <string name="data_cached">本地快取</string>
+    <string name="relay_busy">共享資料服務而家好忙，遲啲再試。</string>
+    <string name="relay_busy_cached">共享資料服務而家好忙，顯示緊儲存咗嘅資料。</string>
+    <string name="relay_daily_quota">共享資料服務今日嘅額度用晒，聽日再試。</string>
+    <string name="relay_daily_quota_cached">共享資料服務今日嘅額度用晒，顯示緊儲存咗嘅資料。</string>
     <string name="offline_cache_title">而家係離線快取</string>
     <string name="offline_cache_body">網絡請求失敗，已顯示上次成功攞到嘅資料。下拉可以再試。</string>
     <string name="label_wind">風速</string>

@@ -32,6 +32,10 @@
     <string name="data_live">Live data</string>
     <string name="data_demo">Demo data</string>
     <string name="data_cached">Cached</string>
+    <string name="relay_busy">The shared data service is busy. Try again in a little while.</string>
+    <string name="relay_busy_cached">The shared data service is busy. Showing saved data.</string>
+    <string name="relay_daily_quota">The shared data service has reached its daily limit. Try again tomorrow.</string>
+    <string name="relay_daily_quota_cached">The shared data service has reached its daily limit. Showing saved data.</string>
     <string name="offline_cache_title">Showing offline cache</string>
     <string name="offline_cache_body">Network request failed. Showing the last successful data. Pull to retry.</string>
     <string name="label_wind">Wind</string>

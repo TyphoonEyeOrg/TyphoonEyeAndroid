@@ -32,6 +32,10 @@
     <string name="data_live">即時資料</string>
     <string name="data_demo">示範資料</string>
     <string name="data_cached">本地快取</string>
+    <string name="relay_busy">共享資料服務正忙，請稍後再試。</string>
+    <string name="relay_busy_cached">共享資料服務正忙，正在顯示已儲存的資料。</string>
+    <string name="relay_daily_quota">共享資料服務的今日額度已用完，請明天再試。</string>
+    <string name="relay_daily_quota_cached">共享資料服務的今日額度已用完，正在顯示已儲存的資料。</string>
     <string name="offline_cache_title">目前為離線快取</string>
     <string name="offline_cache_body">網路請求失敗，已顯示上次成功取得的資料。下拉可重試。</string>
     <string name="label_wind">風速</string>
