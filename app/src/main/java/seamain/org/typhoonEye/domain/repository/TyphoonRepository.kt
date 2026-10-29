@@ -11,6 +11,7 @@ interface TyphoonRepository {
     /**
      * Active list. Served from cache while it is younger than the list TTL (10 min);
      * [forceRefresh] (pull-to-refresh) shortens that to the minimum force interval (60 s).
+     * A relay `Retry-After` suppresses both until it expires.
      */
     suspend fun getActiveTyphoons(forceRefresh: Boolean = false): Result<TyphoonFeed>
 

@@ -84,6 +84,8 @@ import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.util.distanceKmFrom
 import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.DataMode
+import seamain.org.typhoonEye.ui.SummarySourceChip
+import seamain.org.typhoonEye.ui.summarySourceChips
 import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.components.IntensityBadge
 import seamain.org.typhoonEye.ui.components.StatusChip
@@ -306,7 +308,8 @@ private fun StatusSummaryRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (fromCache) {
+        val chips = summarySourceChips(fromCache, dataMode)
+        if (SummarySourceChip.Cached in chips) {
             item {
                 AssistChip(
                     onClick = {},
@@ -343,8 +346,8 @@ private fun StatusSummaryRow(
                 )
             )
         }
-        // Cached data gets the 「缓存」 chip above instead of 「实时数据」.
-        if (!fromCache || dataMode != DataMode.Live) item {
+        // Cached data, including X-Relay-Stale, gets the cache chip above instead of 「实时数据」.
+        if (SummarySourceChip.Live in chips || SummarySourceChip.Demo in chips) item {
             AssistChip(
                 onClick = {},
                 enabled = false,

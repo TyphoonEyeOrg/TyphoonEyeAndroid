@@ -27,6 +27,7 @@ import seamain.org.typhoonEye.data.preferences.UserSettings
 import seamain.org.typhoonEye.data.update.AppUpdateRepository
 import seamain.org.typhoonEye.domain.model.AppUpdateInfo
 import seamain.org.typhoonEye.domain.model.AppUpdateState
+import seamain.org.typhoonEye.domain.model.RelayLimitedException
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
@@ -441,9 +442,7 @@ class TyphoonViewModel @Inject constructor(
                     .onSuccess { feed -> applyFeed(feed) }
                     .onFailure { error ->
                         if (!hadData) {
-                            _uiState.value = TyphoonUiState.Error(
-                                error.message ?: appContext.getString(R.string.error_unknown)
-                            )
+                            _uiState.value = TyphoonUiState.Error(error.userFacingMessage())
                         }
                     }
             } finally {
@@ -458,10 +457,13 @@ class TyphoonViewModel @Inject constructor(
 
     private fun applyFeed(feed: TyphoonFeed) {
         _allTyphoons.value = feed.typhoons
+        val showingCache = feed.fromCache || feed.relayLimit != null
         _uiState.value = TyphoonUiState.Success(
             typhoons = feed.typhoons,
-            fromCache = feed.fromCache,
-            staleMessage = feed.staleMessage
+            fromCache = showingCache,
+            staleMessage = feed.relayLimit?.let { kind ->
+                appContext.getString(kind.userMessageRes(showingCache = true))
+            } ?: feed.staleMessage
         )
         _dataMode.value = DataMode.Live
         // Real fetch time, not "now" — cached data must not look freshly fetched.
@@ -476,6 +478,11 @@ class TyphoonViewModel @Inject constructor(
                 else -> fromFeed.copy(id = selected.id)
             }
         }
+    }
+
+    private fun Throwable.userFacingMessage(): String = when (this) {
+        is RelayLimitedException -> appContext.getString(kind.userMessageRes(showingCache = false))
+        else -> message ?: appContext.getString(R.string.error_unknown)
     }
 
     fun selectTyphoon(typhoon: Typhoon?) {

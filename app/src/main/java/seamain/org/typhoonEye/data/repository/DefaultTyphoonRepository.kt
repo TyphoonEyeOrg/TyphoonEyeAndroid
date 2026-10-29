@@ -4,13 +4,21 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import retrofit2.Response
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
+import seamain.org.typhoonEye.data.api.isRelayStale
+import seamain.org.typhoonEye.data.api.parseRetryAfterUntilMs
+import seamain.org.typhoonEye.data.api.relayLimitKind
+import seamain.org.typhoonEye.data.api.RELAY_STALE_HEADER
+import seamain.org.typhoonEye.data.api.RETRY_AFTER_HEADER
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.domain.model.RelayLimitKind
+import seamain.org.typhoonEye.domain.model.RelayLimitedException
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
@@ -28,6 +36,8 @@ import javax.inject.Named
  *    update time (`endtime`) for that storm changed, so a refresh costs 1 + changed storms.
  * 3) On remote failure → serve Room cache with a stale message.
  * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
+ * 5) HTTP 429/503 and `Retry-After` hold the next refresh (including pull-to-refresh and the
+ *    live-update worker) until the header elapses. `X-Relay-Stale: 1` is cached data, not live.
  */
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
@@ -47,9 +57,17 @@ class DefaultTyphoonRepository @Inject constructor(
     /** Serialises list loads so UI + background worker never fetch in parallel. */
     private val listMutex = Mutex()
 
+    private val relayThrottleLock = Any()
+
     private class FetchOutcome(
         val typhoons: List<Typhoon>? = null,
-        val error: String? = null
+        val error: String? = null,
+        val stale: Boolean = false
+    )
+
+    private class RemoteList(
+        val typhoons: List<Typhoon>,
+        val stale: Boolean
     )
 
     override suspend fun getCachedFeed(): TyphoonFeed? {
@@ -66,6 +84,12 @@ class DefaultTyphoonRepository @Inject constructor(
     override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> =
         listMutex.withLock {
             val now = clock.nowMs()
+            clearExpiredRelayThrottle(now)
+            val blocked = activeRetryUntil(now)
+            if (blocked != null) {
+                Log.i(tag, "Relay Retry-After active until $blocked, skipping network")
+                return@withLock throttledFeed(now, blocked)
+            }
             val lastFetch = syncStore.lastListFetchAtMs
             val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
             val age = lastFetch?.let { now - it }
@@ -86,29 +110,47 @@ class DefaultTyphoonRepository @Inject constructor(
             val cachedList = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
             val remote = fetchRemoteActive(cachedList.associateBy { it.id })
             remote.onSuccess { list ->
-                runCatchingCancellable { localDataSource.replaceAll(list) }
+                runCatchingCancellable { localDataSource.replaceAll(list.typhoons) }
                     .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
                 syncStore.lastListFetchAtMs = now
+                if (list.stale) {
+                    Log.i(tag, "Relay marked the list stale; showing the cache chip")
+                } else {
+                    clearRelayThrottle()
+                }
+                val throttle = currentThrottle()
                 return@withLock Result.success(
-                    TyphoonFeed(typhoons = list.resolved(now), fromCache = false, fetchedAtEpochMs = now)
+                    TyphoonFeed(
+                        typhoons = list.typhoons.resolved(now),
+                        fromCache = list.stale,
+                        fetchedAtEpochMs = now,
+                        relayLimit = if (list.stale) throttle.kind else null,
+                        retryAfterUntilEpochMs = if (list.stale) throttle.untilMs else null
+                    )
                 )
             }
 
+            val error = remote.exceptionOrNull()
+            val limited = error as? RelayLimitedException
             if (cachedList.isNotEmpty()) {
                 Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache")
                 return@withLock Result.success(
                     TyphoonFeed(
                         typhoons = cachedList.resolved(now),
                         fromCache = true,
-                        staleMessage = remote.exceptionOrNull()?.message
-                            ?: "网络请求失败",
-                        fetchedAtEpochMs = lastFetch ?: latestCachedAt()
+                        staleMessage = if (limited == null) {
+                            error?.message ?: "网络请求失败"
+                        } else {
+                            null
+                        },
+                        fetchedAtEpochMs = lastFetch ?: latestCachedAt(),
+                        relayLimit = limited?.kind,
+                        retryAfterUntilEpochMs = limited?.retryAfterUntilEpochMs
                     )
                 )
             }
             Result.failure(
-                remote.exceptionOrNull()
-                    ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+                error ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
             )
         }
 
@@ -122,6 +164,13 @@ class DefaultTyphoonRepository @Inject constructor(
                 Log.d(tag, "Detail $id fresh (${age / 1000}s old), serving Room cache")
                 return Result.success(TyphoonActivity.resolve(cached, now))
             }
+        }
+
+        val blocked = activeRetryUntil(now)
+        if (blocked != null) {
+            Log.i(tag, "Detail $id skipped; relay Retry-After still active")
+            if (cached != null) return Result.success(TyphoonActivity.resolve(cached, now))
+            return Result.failure(RelayLimitedException(currentThrottle().kind ?: RelayLimitKind.Busy, blocked))
         }
 
         val remote = fetchRemoteDetail(id)
@@ -148,7 +197,7 @@ class DefaultTyphoonRepository @Inject constructor(
     private fun Typhoon.hasFullDetail(): Boolean =
         points.size > 1 || forecastPoints.isNotEmpty()
 
-    private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
+    private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<RemoteList> {
         val errors = ArrayList<String>()
 
         if (juheKey.isBlank()) {
@@ -157,7 +206,7 @@ class DefaultTyphoonRepository @Inject constructor(
             val juhe = fetchFromJuhe(cachedById)
             val data = juhe.typhoons
             if (data != null) {
-                return Result.success(data)
+                return Result.success(RemoteList(data, juhe.stale))
             }
             juhe.error?.let { errors.add(it) }
         }
@@ -168,11 +217,16 @@ class DefaultTyphoonRepository @Inject constructor(
             val qWeather = fetchFromQWeather()
             val data = qWeather.typhoons
             if (data != null) {
-                return Result.success(data)
+                return Result.success(RemoteList(data, qWeather.stale))
             }
             qWeather.error?.let { errors.add(it) }
         }
 
+        currentThrottle().kind?.let { kind ->
+            return Result.failure(
+                RelayLimitedException(kind, currentThrottle().untilMs)
+            )
+        }
         val detail = if (errors.isEmpty()) {
             "所有数据源均失败"
         } else {
@@ -186,11 +240,21 @@ class DefaultTyphoonRepository @Inject constructor(
     private suspend fun fetchRemoteDetail(id: String): Result<Typhoon> {
         if (!id.startsWith("NP_") && juheKey.isNotBlank()) {
             try {
-                val response = juheApi.getTyphoonDetail(juheKey, id)
-                if (response.errorCode == 0 && response.result?.data != null) {
-                    return Result.success(response.result.data.toDomain())
+                val http = juheApi.getTyphoonDetail(juheKey, id)
+                val relay = http.relayHttp()
+                if (relay.limit != null) {
+                    rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+                    Log.w(tag, "Juhe detail limited HTTP ${relay.code}")
+                } else if (http.isSuccessful) {
+                    val response = http.body()
+                    val data = response?.result?.data
+                    if (response?.errorCode == 0 && data != null) {
+                        return Result.success(data.toDomain())
+                    }
+                    Log.w(tag, "Juhe detail error: ${response?.reason} (${response?.errorCode})")
+                } else {
+                    Log.w(tag, "Juhe detail HTTP ${http.code()}")
                 }
-                Log.w(tag, "Juhe detail error: ${response.reason} (${response.errorCode})")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -199,16 +263,27 @@ class DefaultTyphoonRepository @Inject constructor(
         }
 
         if (!qWeatherConfigured) {
-            return Result.failure(Exception("无法获取台风详情: $id（和风凭证未配置）"))
+            return limitedOr(Exception("无法获取台风详情: $id（和风凭证未配置）"))
         }
 
         // Keep the caller/nav id stable. QWeather storm id is only for the HTTP path;
         // returning NP_* here used to desync Detail route matching (flash → endless loading).
         val stormId = if (id.startsWith("NP_")) id else "NP_${id.takeLast(4)}"
         try {
-            val track = qWeatherApi.getStormTrack(stormId)
-            if (track.code == "200") {
-                val forecast = runCatchingCancellable { qWeatherApi.getStormForecast(stormId) }.getOrNull()
+            val trackHttp = qWeatherApi.getStormTrack(stormId)
+            val trackRelay = trackHttp.relayHttp()
+            val track = trackHttp.body()
+            if (trackRelay.limit != null) {
+                rememberRelayThrottle(trackRelay.limit, trackRelay.retryAfterUntilMs)
+                Log.w(tag, "QWeather track limited HTTP ${trackRelay.code}")
+            } else if (trackHttp.isSuccessful && track != null && track.code == "200") {
+                val forecastHttp = runCatchingCancellable { qWeatherApi.getStormForecast(stormId) }.getOrNull()
+                forecastHttp?.relayHttp()?.let { forecastRelay ->
+                    if (forecastRelay.limit != null) {
+                        rememberRelayThrottle(forecastRelay.limit, forecastRelay.retryAfterUntilMs)
+                    }
+                }
+                val forecast = forecastHttp?.takeIf { it.isSuccessful }?.body()
                 val infoNow = track.now
                 val typhoon = Typhoon(
                     id = id,
@@ -222,29 +297,38 @@ class DefaultTyphoonRepository @Inject constructor(
                     forecastPoints = forecast?.forecast?.map { it.toDomain() }.orEmpty()
                 )
                 return Result.success(typhoon)
+            } else if (trackHttp.isSuccessful) {
+                Log.e(tag, "QWeather track error code: ${track?.code}")
+            } else {
+                Log.e(tag, "QWeather track HTTP ${trackHttp.code()}")
             }
-            Log.e(tag, "QWeather track error code: ${track.code}")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
-            return Result.failure(Exception("无法获取台风详情: $id（${e.message}）"))
+            return limitedOr(Exception("无法获取台风详情: $id（${e.message}）"))
         }
 
-        return Result.failure(Exception("无法获取台风详情: $id"))
+        return limitedOr(Exception("无法获取台风详情: $id"))
     }
 
     private suspend fun fetchFromJuhe(cachedById: Map<String, Typhoon>): FetchOutcome {
         return try {
-            val listResponse = juheApi.getActiveTyphoons(juheKey)
+            val http = juheApi.getActiveTyphoons(juheKey)
+            val relay = http.relayHttp()
+            if (!http.isSuccessful) {
+                return httpFailure("聚合", relay)
+            }
+            val listResponse = http.body() ?: return FetchOutcome(error = "聚合响应为空")
             when (listResponse.errorCode) {
                 0 -> {
                     val active = listResponse.result?.data.orEmpty()
                     if (active.isEmpty()) {
                         Log.d(tag, "Juhe: no active typhoons")
-                        return FetchOutcome(typhoons = emptyList())
+                        return FetchOutcome(typhoons = emptyList(), stale = relay.stale)
                     }
                     var reused = 0
+                    var stale = relay.stale
                     val typhoons = active.map { info ->
                         val cached = cachedById[info.tfid]
                         if (cached != null && info.endtime.isNotBlank() &&
@@ -255,8 +339,15 @@ class DefaultTyphoonRepository @Inject constructor(
                             return@map cached
                         }
                         try {
-                            val detail = juheApi.getTyphoonDetail(juheKey, info.tfid)
-                            if (detail.errorCode == 0 && detail.result?.data != null) {
+                            val detailHttp = juheApi.getTyphoonDetail(juheKey, info.tfid)
+                            val detailRelay = detailHttp?.relayHttp()
+                            if (detailRelay?.stale == true) stale = true
+                            if (detailRelay?.limit != null) {
+                                rememberRelayThrottle(detailRelay.limit, detailRelay.retryAfterUntilMs)
+                                return@map info.toDomain()
+                            }
+                            val detail = detailHttp?.takeIf { it.isSuccessful }?.body()
+                            if (detail?.errorCode == 0 && detail.result?.data != null) {
                                 // Key the cached detail by the list's update time.
                                 detail.result.data.toDomain().let {
                                     if (info.endtime.isNotBlank()) it.copy(endTime = info.endtime) else it
@@ -272,7 +363,7 @@ class DefaultTyphoonRepository @Inject constructor(
                         }
                     }
                     Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe, reused $reused cached detail(s)")
-                    FetchOutcome(typhoons = typhoons)
+                    FetchOutcome(typhoons = typhoons, stale = stale)
                 }
                 10001, 10002 -> {
                     val msg = "聚合 KEY 无效（${listResponse.errorCode}: ${listResponse.reason}）"
@@ -301,7 +392,12 @@ class DefaultTyphoonRepository @Inject constructor(
     private suspend fun fetchFromQWeather(): FetchOutcome {
         return try {
             val year = Calendar.getInstance().get(Calendar.YEAR).toString()
-            val listResponse = qWeatherApi.getStormList(basin = "NP", year = year)
+            val http = qWeatherApi.getStormList(basin = "NP", year = year)
+            val relay = http.relayHttp()
+            if (!http.isSuccessful) {
+                return httpFailure("和风", relay)
+            }
+            val listResponse = http.body() ?: return FetchOutcome(error = "和风响应为空")
             if (listResponse.code != "200") {
                 val msg = "和风列表错误 code=${listResponse.code}"
                 Log.e(tag, msg)
@@ -311,12 +407,25 @@ class DefaultTyphoonRepository @Inject constructor(
             val activeStorms = listResponse.storm.filter { it.isActive == "1" }
             if (activeStorms.isEmpty()) {
                 Log.d(tag, "QWeather: no active storms in $year")
-                return FetchOutcome(typhoons = emptyList())
+                return FetchOutcome(typhoons = emptyList(), stale = relay.stale)
             }
 
+            var stale = relay.stale
             val typhoons = activeStorms.map { storm ->
-                val track = runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
-                val forecast = runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
+                val trackHttp = runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
+                val trackRelay = trackHttp?.relayHttp()
+                if (trackRelay?.stale == true) stale = true
+                if (trackRelay?.limit != null) {
+                    rememberRelayThrottle(trackRelay.limit, trackRelay.retryAfterUntilMs)
+                }
+                val forecastHttp = runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
+                val forecastRelay = forecastHttp?.relayHttp()
+                if (forecastRelay?.stale == true) stale = true
+                if (forecastRelay?.limit != null) {
+                    rememberRelayThrottle(forecastRelay.limit, forecastRelay.retryAfterUntilMs)
+                }
+                val track = trackHttp?.takeIf { it.isSuccessful }?.body()
+                val forecast = forecastHttp?.takeIf { it.isSuccessful }?.body()
                 storm.toDomain(
                     track = track?.track.orEmpty(),
                     now = track?.now,
@@ -324,13 +433,120 @@ class DefaultTyphoonRepository @Inject constructor(
                 )
             }
             Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
-            FetchOutcome(typhoons = typhoons)
+            FetchOutcome(typhoons = typhoons, stale = stale)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
             FetchOutcome(error = "和风请求失败: ${e.message}")
         }
+    }
+
+    private fun httpFailure(source: String, relay: RelayHttp): FetchOutcome {
+        if (relay.limit != null) {
+            rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+            Log.w(tag, "$source HTTP ${relay.code} retryAt=${relay.retryAfterUntilMs}")
+            return FetchOutcome(error = "$source HTTP ${relay.code}")
+        }
+        val msg = "$source HTTP ${relay.code}"
+        Log.e(tag, msg)
+        return FetchOutcome(error = msg)
+    }
+
+    /** Prefer a relay limit recorded during this attempt over a generic failure. */
+    private fun limitedOr(fallback: Exception): Result<Typhoon> {
+        val throttle = currentThrottle()
+        val kind = throttle.kind
+        return if (kind != null) {
+            Result.failure(RelayLimitedException(kind, throttle.untilMs))
+        } else {
+            Result.failure(fallback)
+        }
+    }
+
+    private data class RelayHttp(
+        val code: Int,
+        val limit: RelayLimitKind?,
+        val retryAfterUntilMs: Long?,
+        val stale: Boolean
+    )
+
+    private fun <T> Response<T>.relayHttp(): RelayHttp {
+        val until = parseRetryAfterUntilMs(headers()[RETRY_AFTER_HEADER], clock.nowMs())
+        val limit = if (isSuccessful) null else relayLimitKind(code())
+        return RelayHttp(
+            code = code(),
+            limit = limit,
+            retryAfterUntilMs = until,
+            stale = isSuccessful && isRelayStale(headers()[RELAY_STALE_HEADER])
+        )
+    }
+
+    private data class ThrottleSnapshot(val kind: RelayLimitKind?, val untilMs: Long?)
+
+    /** Non-null when a `Retry-After` is still in the future. Does not clear the store. */
+    private fun activeRetryUntil(now: Long): Long? = synchronized(relayThrottleLock) {
+        syncStore.relayRetryAfterUntilMs?.takeIf { now < it }
+    }
+
+    /**
+     * Drop an elapsed deadline (or a 429/503 that had no `Retry-After`) so the next
+     * ordinary failure is not labeled with that old limit. List refresh owns this;
+     * a detail read must not clear a deadline the list still needs.
+     */
+    private fun clearExpiredRelayThrottle(now: Long) {
+        synchronized(relayThrottleLock) {
+            val until = syncStore.relayRetryAfterUntilMs
+            if (until != null && now < until) return
+            if (until != null || syncStore.relayLimit != null) {
+                syncStore.relayRetryAfterUntilMs = null
+                syncStore.relayLimit = null
+            }
+        }
+    }
+
+    private fun currentThrottle(): ThrottleSnapshot = synchronized(relayThrottleLock) {
+        ThrottleSnapshot(syncStore.relayLimit, syncStore.relayRetryAfterUntilMs)
+    }
+
+    private fun rememberRelayThrottle(kind: RelayLimitKind, untilMs: Long?) {
+        synchronized(relayThrottleLock) {
+            val existingUntil = syncStore.relayRetryAfterUntilMs
+            if (untilMs != null && (existingUntil == null || untilMs > existingUntil)) {
+                syncStore.relayRetryAfterUntilMs = untilMs
+                syncStore.relayLimit = kind
+                return
+            }
+            if (existingUntil == null) {
+                syncStore.relayLimit = kind
+            }
+        }
+    }
+
+    private fun clearRelayThrottle() {
+        synchronized(relayThrottleLock) {
+            syncStore.relayRetryAfterUntilMs = null
+            syncStore.relayLimit = null
+        }
+    }
+
+    private suspend fun throttledFeed(now: Long, until: Long): Result<TyphoonFeed> {
+        val kind = currentThrottle().kind
+        val cached = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
+        if (cached.isNotEmpty()) {
+            return Result.success(
+                TyphoonFeed(
+                    typhoons = cached.resolved(now),
+                    fromCache = true,
+                    fetchedAtEpochMs = syncStore.lastListFetchAtMs ?: latestCachedAt(),
+                    relayLimit = kind,
+                    retryAfterUntilEpochMs = until
+                )
+            )
+        }
+        return Result.failure(
+            RelayLimitedException(kind ?: RelayLimitKind.Busy, until)
+        )
     }
 
     /**

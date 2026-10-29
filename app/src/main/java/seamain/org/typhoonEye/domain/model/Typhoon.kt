@@ -41,5 +41,12 @@ data class TyphoonFeed(
     /** Non-null only when the network fetch failed and the cache is a fallback. */
     val staleMessage: String? = null,
     /** When this data was actually fetched from the network (not when it was read). */
-    val fetchedAtEpochMs: Long? = null
+    val fetchedAtEpochMs: Long? = null,
+    /**
+     * Set when this feed is a 429/503 fallback or a refresh still inside `Retry-After`.
+     * The UI turns it into localized copy; repository code does not build that sentence.
+     */
+    val relayLimit: RelayLimitKind? = null,
+    /** Epoch millis; list refresh and the live-update worker must not hit the network before this. */
+    val retryAfterUntilEpochMs: Long? = null
 )

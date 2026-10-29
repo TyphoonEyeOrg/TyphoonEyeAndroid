@@ -3,4 +3,8 @@
 <resources>
     <string name="app_name">台风眼</string>
     <string name="app_tagline">西北太平洋台风实时监测</string>
+    <string name="relay_busy">共享数据服务正忙，请稍后再试。</string>
+    <string name="relay_busy_cached">共享数据服务正忙，正在显示已保存的数据。</string>
+    <string name="relay_daily_quota">共享数据服务的今日额度已用完，请明天再试。</string>
+    <string name="relay_daily_quota_cached">共享数据服务的今日额度已用完，正在显示已保存的数据。</string>
 </resources>
