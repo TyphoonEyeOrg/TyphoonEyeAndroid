@@ -273,6 +273,8 @@
     <string name="source_failure_quota">%1$s：用量配額用晒</string>
     <string name="source_failure_api">%1$s：服務回傳錯誤（%2$s）</string>
     <string name="source_failure_network">%1$s：網絡請求失敗</string>
+    <string name="source_failure_relay_busy">共享數據服務而家好忙。如果有存低嘅數據，仍然會顯示。</string>
+    <string name="source_failure_relay_daily_quota">共享數據服務今日額度用完。如果有存低嘅數據，仍然會顯示。</string>
     <string name="demo_bavi_position">距離浙閩交界東南面約890公里（範例）</string>
     <string name="demo_bavi_forecast">範例預報：會以每小時20–25公里向西北移動，強度變化唔大。</string>
     <string name="demo_mekkhala_position">菲律賓以東海面（範例）</string>

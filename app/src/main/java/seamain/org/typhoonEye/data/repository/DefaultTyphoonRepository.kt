@@ -8,6 +8,8 @@ import retrofit2.HttpException
 import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
+import seamain.org.typhoonEye.data.api.RelayHeaderCapture
+import seamain.org.typhoonEye.data.api.RelayHeaders
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
@@ -34,7 +36,9 @@ import javax.inject.Inject
  * 2) Remote: prefer Juhe, fallback QWeather. A Juhe detail is only re-fetched when the list's
  *    update time (`endtime`) for that storm changed, so a refresh costs 1 + changed storms.
  * 3) On remote failure → serve Room cache with a typed stale reason.
- * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
+ * 4) Relay `Retry-After` skips that source until it expires (pull-to-refresh included).
+ *    `X-Relay-Stale: 1` is saved, but the feed is marked cached so the UI does not call it live.
+ * 5) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
  *
  * Failures are typed ([TyphoonDataError]); the UI resolves localized text.
  * A direct-mode build without any API key (e.g. a local GitHub-flavor build without
@@ -48,7 +52,8 @@ class DefaultTyphoonRepository @Inject constructor(
     private val config: DataSourceConfig,
     private val localDataSource: TyphoonLocalDataSource,
     private val syncStore: FeedSyncStore,
-    private val clock: WallClock
+    private val clock: WallClock,
+    private val relayHeaders: RelayHeaderCapture
 ) : TyphoonRepository {
 
     private val qWeatherConfigured: Boolean
@@ -72,7 +77,14 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private class FetchOutcome(
         val typhoons: List<Typhoon>? = null,
-        val failure: SourceFailure? = null
+        val failure: SourceFailure? = null,
+        /** List response carried `X-Relay-Stale: 1` (older data, not a live observation). */
+        val relayStale: Boolean = false
+    )
+
+    private class RemoteActive(
+        val typhoons: List<Typhoon>,
+        val relayStale: Boolean
     )
 
     override suspend fun getCachedFeed(): TyphoonFeed? {
@@ -108,12 +120,18 @@ class DefaultTyphoonRepository @Inject constructor(
 
             val cachedList = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
             val remote = fetchRemoteActive(cachedList.associateBy { it.id })
-            remote.onSuccess { list ->
+            remote.onSuccess { loaded ->
+                val list = loaded.typhoons
                 runCatchingCancellable { localDataSource.replaceAll(list) }
                     .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
                 syncStore.lastListFetchAtMs = now
                 return@withLock Result.success(
-                    TyphoonFeed(typhoons = list.resolved(now), fromCache = false, fetchedAtEpochMs = now)
+                    TyphoonFeed(
+                        typhoons = list.resolved(now),
+                        // Stale relay bodies reuse the cache chip; they are not live observations.
+                        fromCache = loaded.relayStale,
+                        fetchedAtEpochMs = now
+                    )
                 )
             }
 
@@ -169,7 +187,7 @@ class DefaultTyphoonRepository @Inject constructor(
     private fun Typhoon.hasFullDetail(): Boolean =
         points.size > 1 || forecastPoints.isNotEmpty()
 
-    private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<List<Typhoon>> {
+    private suspend fun fetchRemoteActive(cachedById: Map<String, Typhoon>): Result<RemoteActive> {
         if (!hasAnyDataSource) {
             Log.i(tag, "No data source configured in this build (no relay, no JUHE_KEY / QWeather credentials)")
             return Result.failure(NoDataSourceConfiguredError())
@@ -178,15 +196,27 @@ class DefaultTyphoonRepository @Inject constructor(
         val failures = ArrayList<SourceFailure>()
 
         if (juheConfigured) {
-            val juhe = fetchFromJuhe(cachedById)
-            juhe.typhoons?.let { return Result.success(it) }
-            juhe.failure?.let { failures.add(it) }
+            val blocked = relayBlock(DataSource.Juhe)
+            if (blocked != null) {
+                Log.d(tag, "Juhe skipped until ${blocked.retryAfterEpochMs}")
+                failures.add(blocked)
+            } else {
+                val juhe = fetchFromJuhe(cachedById)
+                juhe.typhoons?.let { return Result.success(RemoteActive(it, juhe.relayStale)) }
+                juhe.failure?.let { failures.add(it) }
+            }
         }
 
         if (qWeatherConfigured) {
-            val qWeather = fetchFromQWeather()
-            qWeather.typhoons?.let { return Result.success(it) }
-            qWeather.failure?.let { failures.add(it) }
+            val blocked = relayBlock(DataSource.QWeather)
+            if (blocked != null) {
+                Log.d(tag, "QWeather skipped until ${blocked.retryAfterEpochMs}")
+                failures.add(blocked)
+            } else {
+                val qWeather = fetchFromQWeather()
+                qWeather.typhoons?.let { return Result.success(RemoteActive(it, qWeather.relayStale)) }
+                qWeather.failure?.let { failures.add(it) }
+            }
         }
 
         return Result.failure(DataSourcesFailedError(failures))
@@ -199,7 +229,10 @@ class DefaultTyphoonRepository @Inject constructor(
         val failures = ArrayList<SourceFailure>()
 
         if (!id.startsWith("NP_") && juheConfigured) {
-            try {
+            val blocked = relayBlock(DataSource.Juhe)
+            if (blocked != null) {
+                failures.add(blocked)
+            } else try {
                 val response = juheApi.getTyphoonDetail(juheKey, id)
                 if (response.errorCode == 0 && response.result?.data != null) {
                     return Result.success(response.result.data.toDomain())
@@ -210,11 +243,18 @@ class DefaultTyphoonRepository @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Log.e(tag, "Juhe detail request failed", e)
-                failures.add(exceptionFailure(DataSource.Juhe, e))
+                val failure = exceptionFailure(DataSource.Juhe, e)
+                noteFailureThrottle(DataSource.Juhe, failure)
+                failures.add(failure)
             }
         }
 
         if (!qWeatherConfigured) {
+            return Result.failure(TyphoonDetailUnavailableError(id, failures))
+        }
+
+        relayBlock(DataSource.QWeather)?.let { blocked ->
+            failures.add(blocked)
             return Result.failure(TyphoonDetailUnavailableError(id, failures))
         }
 
@@ -245,7 +285,9 @@ class DefaultTyphoonRepository @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
-            failures.add(exceptionFailure(DataSource.QWeather, e))
+            val failure = exceptionFailure(DataSource.QWeather, e)
+            noteFailureThrottle(DataSource.QWeather, failure)
+            failures.add(failure)
         }
 
         return Result.failure(TyphoonDetailUnavailableError(id, failures))
@@ -254,12 +296,14 @@ class DefaultTyphoonRepository @Inject constructor(
     private suspend fun fetchFromJuhe(cachedById: Map<String, Typhoon>): FetchOutcome {
         return try {
             val listResponse = juheApi.getActiveTyphoons(juheKey)
+            val relay = relayHeaders.consumeEndingWith(RelayHeaders.JUHE_ACTIVE_SUFFIX)
+            noteRelayResponse(DataSource.Juhe, relay)
             when (listResponse.errorCode) {
                 0 -> {
                     val active = listResponse.result?.data.orEmpty()
                     if (active.isEmpty()) {
                         Log.d(tag, "Juhe: no active typhoons")
-                        return FetchOutcome(typhoons = emptyList())
+                        return FetchOutcome(typhoons = emptyList(), relayStale = relay?.stale == true)
                     }
                     var reused = 0
                     val typhoons = active.map { info ->
@@ -289,7 +333,7 @@ class DefaultTyphoonRepository @Inject constructor(
                         }
                     }
                     Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe, reused $reused cached detail(s)")
-                    FetchOutcome(typhoons = typhoons)
+                    FetchOutcome(typhoons = typhoons, relayStale = relay?.stale == true)
                 }
                 else -> {
                     val failure = juheFailure(listResponse.errorCode, listResponse.reason)
@@ -298,10 +342,14 @@ class DefaultTyphoonRepository @Inject constructor(
                 }
             }
         } catch (e: CancellationException) {
+            relayHeaders.consumeEndingWith(RelayHeaders.JUHE_ACTIVE_SUFFIX)
             throw e
         } catch (e: Exception) {
+            relayHeaders.consumeEndingWith(RelayHeaders.JUHE_ACTIVE_SUFFIX)
             Log.e(tag, "Juhe request failed", e)
-            FetchOutcome(failure = exceptionFailure(DataSource.Juhe, e))
+            val failure = exceptionFailure(DataSource.Juhe, e)
+            noteFailureThrottle(DataSource.Juhe, failure)
+            FetchOutcome(failure = failure)
         }
     }
 
@@ -309,6 +357,8 @@ class DefaultTyphoonRepository @Inject constructor(
         return try {
             val year = Calendar.getInstance().get(Calendar.YEAR).toString()
             val listResponse = qWeatherApi.getStormList(basin = "NP", year = year)
+            val relay = relayHeaders.consumeEndingWith(RelayHeaders.QWEATHER_LIST_SUFFIX)
+            noteRelayResponse(DataSource.QWeather, relay)
             if (listResponse.code != "200") {
                 Log.e(tag, "QWeather list error code=${listResponse.code}")
                 return FetchOutcome(failure = qWeatherFailure(listResponse.code))
@@ -317,7 +367,7 @@ class DefaultTyphoonRepository @Inject constructor(
             val activeStorms = listResponse.storm.filter { it.isActive == "1" }
             if (activeStorms.isEmpty()) {
                 Log.d(tag, "QWeather: no active storms in $year")
-                return FetchOutcome(typhoons = emptyList())
+                return FetchOutcome(typhoons = emptyList(), relayStale = relay?.stale == true)
             }
 
             val typhoons = activeStorms.map { storm ->
@@ -330,12 +380,52 @@ class DefaultTyphoonRepository @Inject constructor(
                 )
             }
             Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
-            FetchOutcome(typhoons = typhoons)
+            FetchOutcome(typhoons = typhoons, relayStale = relay?.stale == true)
         } catch (e: CancellationException) {
+            relayHeaders.consumeEndingWith(RelayHeaders.QWEATHER_LIST_SUFFIX)
             throw e
         } catch (e: Exception) {
+            relayHeaders.consumeEndingWith(RelayHeaders.QWEATHER_LIST_SUFFIX)
             Log.e(tag, "QWeather request failed", e)
-            FetchOutcome(failure = exceptionFailure(DataSource.QWeather, e))
+            val failure = exceptionFailure(DataSource.QWeather, e)
+            noteFailureThrottle(DataSource.QWeather, failure)
+            FetchOutcome(failure = failure)
+        }
+    }
+
+    /**
+     * Non-null when this source's relay `Retry-After` is still in the future.
+     * The caller records it as a failure and does not open a socket.
+     */
+    private fun relayBlock(source: DataSource): SourceFailure? {
+        val until = syncStore.relayNotBeforeEpochMs(source) ?: return null
+        if (clock.nowMs() >= until) return null
+        val code = syncStore.relayThrottleHttpCode(source)
+        val kind = when (code) {
+            "503" -> SourceFailureKind.RelayDailyQuota
+            "429", null -> SourceFailureKind.RelayBusy
+            else -> SourceFailureKind.ApiError
+        }
+        return SourceFailure(source, kind, code = code, retryAfterEpochMs = until)
+    }
+
+    /** HTTP 200 (including `X-Relay-Stale`) may still carry `Retry-After`. A missing snapshot leaves any stored wait alone. */
+    private fun noteRelayResponse(source: DataSource, relay: RelayHeaderCapture.Snapshot?) {
+        if (relay == null) return
+        val until = RelayHeaders.retryAfterEpochMs(relay.retryAfter, clock.nowMs())
+        if (until != null) {
+            syncStore.setRelayThrottle(source, until, httpCode = null)
+        } else {
+            syncStore.clearRelayThrottle(source)
+        }
+    }
+
+    private fun noteFailureThrottle(source: DataSource, failure: SourceFailure) {
+        val until = failure.retryAfterEpochMs
+        if (until != null) {
+            syncStore.setRelayThrottle(source, until, failure.code)
+        } else {
+            syncStore.clearRelayThrottle(source)
         }
     }
 
@@ -380,19 +470,32 @@ class DefaultTyphoonRepository @Inject constructor(
     }
 
     /**
-     * HTTP errors (e.g. from the relay: 429 rate limit, 502/503 upstream trouble) keep their
-     * status code; everything else (offline, timeout, TLS, parse error) is a network failure.
+     * HTTP errors from the relay keep their status: 429 is "busy", 503 is the daily
+     * limit, and a `Retry-After` header becomes [SourceFailure.retryAfterEpochMs].
+     * Everything else (offline, timeout, TLS, parse error) is a network failure.
      * Cancellation is rethrown so a superseded refresh releases [listMutex].
      */
     private fun exceptionFailure(source: DataSource, e: Exception): SourceFailure {
         if (e is CancellationException) throw e
         return if (e is HttpException) {
-            val kind = when (e.code()) {
-                429 -> SourceFailureKind.QuotaExceeded
+            val code = e.code()
+            val kind = when (code) {
+                429 -> SourceFailureKind.RelayBusy
+                503 -> SourceFailureKind.RelayDailyQuota
                 401, 403 -> keyRejected()
                 else -> SourceFailureKind.ApiError
             }
-            SourceFailure(source, kind, code = e.code().toString(), detail = e.message())
+            val retryAfter = RelayHeaders.retryAfterEpochMs(
+                e.response()?.headers()?.get(RelayHeaders.RETRY_AFTER),
+                clock.nowMs()
+            )
+            SourceFailure(
+                source,
+                kind,
+                code = code.toString(),
+                detail = e.message(),
+                retryAfterEpochMs = retryAfter
+            )
         } else {
             SourceFailure(source, SourceFailureKind.Network, detail = e.message)
         }

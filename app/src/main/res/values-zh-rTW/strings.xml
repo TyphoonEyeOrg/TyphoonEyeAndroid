@@ -273,6 +273,8 @@
     <string name="source_failure_quota">%1$s：呼叫配額已用盡</string>
     <string name="source_failure_api">%1$s：服務回傳錯誤（%2$s）</string>
     <string name="source_failure_network">%1$s：網路請求失敗</string>
+    <string name="source_failure_relay_busy">共享資料服務正忙。有已儲存的資料時仍會顯示。</string>
+    <string name="source_failure_relay_daily_quota">共享資料服務今日額度已用完。有已儲存的資料時仍會顯示。</string>
     <string name="demo_bavi_position">距離浙閩交界東南方約890公里（範例）</string>
     <string name="demo_bavi_forecast">範例預報：將以每小時20–25公里的速度向西北方移動，強度變化不大。</string>
     <string name="demo_mekkhala_position">菲律賓以東洋面（範例）</string>
