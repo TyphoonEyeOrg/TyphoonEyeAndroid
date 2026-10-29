@@ -239,8 +239,8 @@ class TyphoonAlertNotifier(
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
         // Drop HIGH/ALARM legacy channel that caused Aggregate_Alerting to eat Live.
         runCatching { manager.deleteNotificationChannel(LEGACY_CHANNEL_ID) }
-        val existing = manager.getNotificationChannel(CHANNEL_ID)
-        if (existing != null) return
+        // Same id every time this runs. Android updates the display name and
+        // description; importance, and any settings the user changed, stay.
         val channel = NotificationChannel(
             CHANNEL_ID,
             appContext.getString(R.string.alert_channel_name),

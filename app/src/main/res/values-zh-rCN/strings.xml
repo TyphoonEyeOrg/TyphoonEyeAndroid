@@ -7,4 +7,10 @@
     <string name="relay_busy_cached">共享数据服务正忙，正在显示已保存的数据。</string>
     <string name="relay_daily_quota">共享数据服务的今日额度已用完，请明天再试。</string>
     <string name="relay_daily_quota_cached">共享数据服务的今日额度已用完，正在显示已保存的数据。</string>
+    <string name="emergency_alerts_on">非官方转发：预警信号与强台风提示；请以当地气象部门为准</string>
+    <string name="location_alerts_on">按你的位置查询附近预警与风暴提示（非官方）；请以当地气象部门为准</string>
+    <string name="alert_channel_name">台风紧急预警（非官方）</string>
+    <string name="alert_channel_desc">非官方转发的台风预警信号与高强度提示；请以当地气象部门为准</string>
+    <string name="alert_settings_on">收到转发的台风预警或强台风提示时立即通知（非官方）；请以当地气象部门为准</string>
+    <string name="location_opt_in_notice_body">%1$s 不再默认使用你的位置。基于定位推送（距离提醒和你附近的预警信息，非官方）在你手动开启前保持关闭，之后也可以随时在设置里更改。</string>
 </resources>
