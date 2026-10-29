@@ -166,12 +166,12 @@
     <string name="emergency_alerts_title">Emergency alerts</string>
     <string name="emergency_alerts_off">When off, typhoon emergency alerts won’t be sent</string>
     <string name="emergency_alerts_need_permission">On, but notification permission is required</string>
-    <string name="emergency_alerts_on">Official warning signals and intense-typhoon alerts</string>
+    <string name="emergency_alerts_on">Unofficial relay of warning signals and intense-typhoon alerts; always follow your local meteorological authority</string>
     <string name="cd_emergency_alerts_switch">Emergency alerts toggle</string>
     <string name="location_alerts_title">Location-based alerts</string>
     <string name="location_alerts_off">When off, coastal watchpoints are used instead of your GPS</string>
     <string name="location_alerts_need_permission">On — grant location permission to query alerts near you</string>
-    <string name="location_alerts_on">Prefer official typhoon alerts at your location and nearby storms</string>
+    <string name="location_alerts_on">Show nearby warning and storm alerts at your location (unofficial); follow your local meteorological authority</string>
     <string name="location_alerts_on_with_place">Using: %1$s</string>
     <string name="cd_location_alerts_switch">Location-based alert switch</string>
     <string name="grant_location_permission">Grant location permission</string>
@@ -239,11 +239,11 @@
     <string name="live_activity_row_move">Motion　%1$s</string>
     <string name="live_activity_row_position">Location　%1$s</string>
     <string name="live_activity_row_observed">Observed　%1$s</string>
-    <string name="alert_channel_name">Typhoon emergency alerts</string>
-    <string name="alert_channel_desc">Official typhoon warning signals and high-intensity alerts</string>
+    <string name="alert_channel_name">Typhoon emergency alerts (unofficial)</string>
+    <string name="alert_channel_desc">Unofficial relay of typhoon warning signals and high-intensity alerts; follow your local meteorological authority</string>
     <string name="alert_group_summary">%1$d typhoon alerts</string>
     <string name="alert_settings_title">Emergency alert notifications</string>
-    <string name="alert_settings_on">Notify immediately for official typhoon warnings or intense-typhoon alerts</string>
+    <string name="alert_settings_on">Notify right away for relayed typhoon warnings or intense-typhoon alerts (unofficial); follow your local meteorological authority</string>
     <string name="alert_settings_off">Emergency alert notifications are off</string>
     <string name="alert_settings_need_permission">On, but notification permission is required</string>
     <string name="alert_send_demo">Send test alert</string>
@@ -306,7 +306,7 @@
     <string name="demo_hagupit_name">Hagupit</string>
     <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
     <string name="location_opt_in_notice_title">Location-based alerts are now opt-in</string>
-    <string name="location_opt_in_notice_body">%1$s no longer uses your location by default. Location-based alerts (distance alerts and official warnings near you) stay off until you turn them on yourself. You can change this any time in Settings.</string>
+    <string name="location_opt_in_notice_body">%1$s no longer uses your location by default. Location-based alerts (distance alerts and nearby warnings, unofficial) stay off until you turn them on. You can change this any time in Settings.</string>
     <string name="location_opt_in_notice_turn_on">Turn on</string>
     <string name="location_opt_in_notice_dismiss">Not now</string>
 </resources>

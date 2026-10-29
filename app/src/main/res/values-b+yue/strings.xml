@@ -162,12 +162,12 @@
     <string name="emergency_alerts_title">緊急預警</string>
     <string name="emergency_alerts_off">關掉之後就唔再推送颱風預警</string>
     <string name="emergency_alerts_need_permission">開咗，但要畀通知權限先收到</string>
-    <string name="emergency_alerts_on">官方預警訊號同強颱風緊急提示</string>
+    <string name="emergency_alerts_on">非官方轉發：預警訊號同強颱風提示；請以當地氣象部門為準</string>
     <string name="cd_emergency_alerts_switch">緊急預警通知開關</string>
     <string name="location_alerts_title">按定位推送</string>
     <string name="location_alerts_off">關閉之後會用預設沿海監測點，唔會用你嘅位置</string>
     <string name="location_alerts_need_permission">已開啟，要俾定位權限先會按你位置查預警</string>
-    <string name="location_alerts_on">優先查你所在位置嘅官方颱風預警，同提示附近風暴</string>
+    <string name="location_alerts_on">按你嘅位置查附近預警同風暴提示（非官方）；請以當地氣象部門為準</string>
     <string name="location_alerts_on_with_place">而家用緊：%1$s</string>
     <string name="cd_location_alerts_switch">按定位推送預警開關</string>
     <string name="grant_location_permission">授予定位權限</string>
@@ -235,11 +235,11 @@
     <string name="live_activity_row_move">移動　%1$s</string>
     <string name="live_activity_row_position">位置　%1$s</string>
     <string name="live_activity_row_observed">觀測　%1$s</string>
-    <string name="alert_channel_name">颱風緊急預警</string>
-    <string name="alert_channel_desc">官方氣象台颱風預警訊號同高強度颱風緊急提示</string>
+    <string name="alert_channel_name">颱風緊急預警（非官方）</string>
+    <string name="alert_channel_desc">非官方轉發嘅颱風預警訊號同高強度提示；請以當地氣象部門為準</string>
     <string name="alert_group_summary">%1$d 條颱風預警</string>
     <string name="alert_settings_title">緊急預警通知</string>
-    <string name="alert_settings_on">收到颱風相關官方預警或者強颱風緊急提示就即刻通知</string>
+    <string name="alert_settings_on">收到轉發嘅颱風預警或者強颱風提示就即刻通知（非官方）；請以當地氣象部門為準</string>
     <string name="alert_settings_off">關掉之後就唔再推送緊急預警通知</string>
     <string name="alert_settings_need_permission">開咗，但要畀通知權限先收到</string>
     <string name="alert_send_demo">傳送測試預警</string>
@@ -302,7 +302,7 @@
     <string name="demo_hagupit_name">黑格比</string>
     <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
     <string name="location_opt_in_notice_title">按定位推送要自己開返</string>
-    <string name="location_opt_in_notice_body">%1$s 而家唔會預設用你嘅位置。按定位推送（距離提醒同你附近嘅官方預警）喺你自己開返之前會一直熄咗，之後都可以隨時喺設定度改。</string>
+    <string name="location_opt_in_notice_body">%1$s 而家唔會預設用你嘅位置。按定位推送（距離提醒同你附近嘅預警資訊，非官方）喺你自己開返之前會一直熄咗，之後都可以隨時喺設定度改。</string>
     <string name="location_opt_in_notice_turn_on">去開啟</string>
     <string name="location_opt_in_notice_dismiss">遲啲先</string>
 </resources>
