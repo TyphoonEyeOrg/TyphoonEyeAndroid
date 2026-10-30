@@ -2,8 +2,13 @@ package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import retrofit2.HttpException
 import seamain.org.typhoonEye.data.api.DataSourceConfig
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
@@ -27,6 +32,7 @@ import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
@@ -38,7 +44,10 @@ import javax.inject.Inject
  * 3) On remote failure → serve Room cache with a typed stale reason.
  * 4) Relay `Retry-After` skips that source until it expires (pull-to-refresh included).
  *    `X-Relay-Stale: 1` is saved, but the feed is marked cached so the UI does not call it live.
+ *    The same headers on a QWeather track or forecast call update that throttle and stale flag.
  * 5) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
+ * 6) QWeather track and forecast calls run together, at most [QWEATHER_MAX_IN_FLIGHT] at once.
+ *    One storm failing leaves the others, and the list, on screen.
  *
  * Failures are typed ([TyphoonDataError]); the UI resolves localized text.
  * A direct-mode build without any API key (e.g. a local GitHub-flavor build without
@@ -74,6 +83,10 @@ class DefaultTyphoonRepository @Inject constructor(
 
     /** Serialises list loads so UI + background worker never fetch in parallel. */
     private val listMutex = Mutex()
+
+    /** Caps in-flight QWeather track/forecast calls so a multi-storm fallback cannot stampede the relay. */
+    private val qWeatherInFlight = Semaphore(QWEATHER_MAX_IN_FLIGHT)
+    private val qWeatherThrottleLock = Any()
 
     private class FetchOutcome(
         val typhoons: List<Typhoon>? = null,
@@ -370,17 +383,32 @@ class DefaultTyphoonRepository @Inject constructor(
                 return FetchOutcome(typhoons = emptyList(), relayStale = relay?.stale == true)
             }
 
-            val typhoons = activeStorms.map { storm ->
-                val track = runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
-                val forecast = runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
-                storm.toDomain(
-                    track = track?.track.orEmpty(),
-                    now = track?.now,
-                    forecast = forecast?.forecast.orEmpty()
-                )
+            val relayStale = AtomicBoolean(relay?.stale == true)
+            val typhoons = coroutineScope {
+                activeStorms.map { storm ->
+                    async {
+                        val track = async {
+                            qWeatherLimited(RelayHeaders.QWEATHER_TRACK_SUFFIX, relayStale) {
+                                qWeatherApi.getStormTrack(storm.id)
+                            }
+                        }
+                        val forecast = async {
+                            qWeatherLimited(RelayHeaders.QWEATHER_FORECAST_SUFFIX, relayStale) {
+                                qWeatherApi.getStormForecast(storm.id)
+                            }
+                        }
+                        val trackBody = track.await()
+                        val forecastBody = forecast.await()
+                        storm.toDomain(
+                            track = trackBody?.track.orEmpty(),
+                            now = trackBody?.now,
+                            forecast = forecastBody?.forecast.orEmpty()
+                        )
+                    }
+                }.awaitAll()
             }
             Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
-            FetchOutcome(typhoons = typhoons, relayStale = relay?.stale == true)
+            FetchOutcome(typhoons = typhoons, relayStale = relayStale.get())
         } catch (e: CancellationException) {
             relayHeaders.consumeEndingWith(RelayHeaders.QWEATHER_LIST_SUFFIX)
             throw e
@@ -390,6 +418,61 @@ class DefaultTyphoonRepository @Inject constructor(
             val failure = exceptionFailure(DataSource.QWeather, e)
             noteFailureThrottle(DataSource.QWeather, failure)
             FetchOutcome(failure = failure)
+        }
+    }
+
+    /**
+     * One QWeather track or forecast call. [qWeatherInFlight] keeps at most
+     * [QWEATHER_MAX_IN_FLIGHT] of these running. A 429/503 `Retry-After` is stored
+     * the same way as a list failure, and later calls in this batch are skipped
+     * instead of opening another socket. A failure returns null so the other storms still render.
+     */
+    private suspend fun <T> qWeatherLimited(
+        pathSuffix: String,
+        relayStale: AtomicBoolean,
+        block: suspend () -> T
+    ): T? {
+        if (relayBlock(DataSource.QWeather) != null) return null
+        return qWeatherInFlight.withPermit {
+            if (relayBlock(DataSource.QWeather) != null) return@withPermit null
+            try {
+                val value = block()
+                noteQWeatherPart(relayHeaders.consumeEndingWith(pathSuffix), relayStale)
+                value
+            } catch (e: CancellationException) {
+                relayHeaders.consumeEndingWith(pathSuffix)
+                throw e
+            } catch (e: Exception) {
+                noteQWeatherPart(relayHeaders.consumeEndingWith(pathSuffix), relayStale)
+                val failure = exceptionFailure(DataSource.QWeather, e)
+                // Extend only. A sibling 200 must not clear a Retry-After recorded in this batch.
+                failure.retryAfterEpochMs?.let { until ->
+                    extendQWeatherThrottle(until, failure.code)
+                }
+                Log.w(tag, "QWeather $pathSuffix failed", e)
+                null
+            }
+        }
+    }
+
+    /** HTTP 200 track/forecast: fold `X-Relay-Stale` into the feed and honor `Retry-After`. */
+    private fun noteQWeatherPart(relay: RelayHeaderCapture.Snapshot?, relayStale: AtomicBoolean) {
+        if (relay == null) return
+        if (relay.stale) relayStale.set(true)
+        val until = RelayHeaders.retryAfterEpochMs(relay.retryAfter, clock.nowMs()) ?: return
+        extendQWeatherThrottle(until, httpCode = null)
+    }
+
+    /**
+     * Keep the later deadline. A 200 that also carries `Retry-After` must not wipe
+     * the HTTP code a concurrent 429/503 already stored.
+     */
+    private fun extendQWeatherThrottle(until: Long, httpCode: String?) {
+        synchronized(qWeatherThrottleLock) {
+            val existingUntil = syncStore.relayNotBeforeEpochMs(DataSource.QWeather) ?: 0L
+            if (existingUntil > until) return
+            val code = httpCode ?: syncStore.relayThrottleHttpCode(DataSource.QWeather)
+            syncStore.setRelayThrottle(DataSource.QWeather, until, code)
         }
     }
 
@@ -505,5 +588,8 @@ class DefaultTyphoonRepository @Inject constructor(
         const val LIST_TTL_MS: Long = 10L * 60 * 1000
         const val MIN_FORCE_INTERVAL_MS: Long = 60L * 1000
         const val DETAIL_TTL_MS: Long = 30L * 60 * 1000
+
+        /** Shared cap for QWeather track and forecast requests. */
+        internal const val QWEATHER_MAX_IN_FLIGHT = 3
     }
 }
