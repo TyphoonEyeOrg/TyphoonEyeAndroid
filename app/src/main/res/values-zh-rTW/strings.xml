@@ -165,12 +165,12 @@
     <string name="emergency_alerts_title">緊急預警</string>
     <string name="emergency_alerts_off">關閉後不再推送颱風預警</string>
     <string name="emergency_alerts_need_permission">已開啟，需授予通知權限後才會推送</string>
-    <string name="emergency_alerts_on">官方預警訊號與強颱風緊急提示</string>
+    <string name="emergency_alerts_on">非官方轉發：預警訊號與強颱風提示；請以當地氣象部門為準</string>
     <string name="cd_emergency_alerts_switch">緊急預警通知開關</string>
     <string name="location_alerts_title">依定位推播</string>
     <string name="location_alerts_off">關閉後改用預設沿海監測點，不使用你的位置</string>
     <string name="location_alerts_need_permission">已開啟，需授予定位權限後才會依你的位置查詢預警</string>
-    <string name="location_alerts_on">優先查詢你所在位置的官方颱風預警，並提示附近風暴</string>
+    <string name="location_alerts_on">依你的位置查詢附近預警與風暴提示（非官方）；請以當地氣象部門為準</string>
     <string name="location_alerts_on_with_place">正在使用：%1$s</string>
     <string name="cd_location_alerts_switch">依定位推播預警開關</string>
     <string name="grant_location_permission">授予定位權限</string>
@@ -238,11 +238,11 @@
     <string name="live_activity_row_move">移動　%1$s</string>
     <string name="live_activity_row_position">位置　%1$s</string>
     <string name="live_activity_row_observed">觀測　%1$s</string>
-    <string name="alert_channel_name">颱風緊急預警</string>
-    <string name="alert_channel_desc">官方氣象台颱風預警訊號與高強度颱風緊急提示</string>
+    <string name="alert_channel_name">颱風緊急預警（非官方）</string>
+    <string name="alert_channel_desc">非官方轉發的颱風預警訊號與高強度提示；請以當地氣象部門為準</string>
     <string name="alert_group_summary">%1$d 則颱風預警</string>
     <string name="alert_settings_title">緊急預警通知</string>
-    <string name="alert_settings_on">收到颱風相關官方預警或強颱風緊急提示時立即通知</string>
+    <string name="alert_settings_on">收到轉發的颱風預警或強颱風提示時立即通知（非官方）；請以當地氣象部門為準</string>
     <string name="alert_settings_off">關閉後不再推送緊急預警通知</string>
     <string name="alert_settings_need_permission">已開啟，但需授予通知權限後才會推送</string>
     <string name="alert_send_demo">傳送測試預警</string>
@@ -261,7 +261,7 @@
     <string name="oss_test_desc">Kotlin Flow 響應式資料流測試庫與 Mockito 單元測試模擬框架</string>
     <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
     <string name="location_opt_in_notice_title">依定位推播改為需手動開啟</string>
-    <string name="location_opt_in_notice_body">%1$s 不再預設使用你的位置。依定位推播（距離提醒與你附近的官方預警）在你自行開啟前會維持關閉，之後也可以隨時在設定中變更。</string>
+    <string name="location_opt_in_notice_body">%1$s 不再預設使用你的位置。依定位推播（距離提醒與你附近的預警資訊，非官方）在你自行開啟前會維持關閉，之後也可以隨時在設定中變更。</string>
     <string name="location_opt_in_notice_turn_on">去開啟</string>
     <string name="location_opt_in_notice_dismiss">暫不</string>
 </resources>
