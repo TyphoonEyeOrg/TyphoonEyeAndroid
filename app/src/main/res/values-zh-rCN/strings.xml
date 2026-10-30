@@ -165,12 +165,12 @@
     <string name="emergency_alerts_title">紧急预警</string>
     <string name="emergency_alerts_off">关闭后不再推送台风预警</string>
     <string name="emergency_alerts_need_permission">已开启，需授予通知权限后才会推送</string>
-    <string name="emergency_alerts_on">官方预警信号与强台风紧急提示</string>
+    <string name="emergency_alerts_on">非官方转发：预警信号与强台风提示；请以当地气象部门为准</string>
     <string name="cd_emergency_alerts_switch">紧急预警通知开关</string>
     <string name="location_alerts_title">基于定位推送</string>
     <string name="location_alerts_off">关闭后使用默认沿海监测点，不使用你的位置</string>
     <string name="location_alerts_need_permission">已开启，需授予定位权限后才会按你的位置查预警</string>
-    <string name="location_alerts_on">优先查询你所在位置的官方台风预警，并提示附近风暴</string>
+    <string name="location_alerts_on">按你的位置查询附近预警与风暴提示（非官方）；请以当地气象部门为准</string>
     <string name="location_alerts_on_with_place">正在使用：%1$s</string>
     <string name="cd_location_alerts_switch">基于定位推送预警开关</string>
     <string name="grant_location_permission">授予定位权限</string>
@@ -239,11 +239,11 @@
     <string name="live_activity_row_move">移动　%1$s</string>
     <string name="live_activity_row_position">位置　%1$s</string>
     <string name="live_activity_row_observed">观测　%1$s</string>
-    <string name="alert_channel_name">台风紧急预警</string>
-    <string name="alert_channel_desc">官方气象台台风预警信号与高强度台风紧急提示</string>
+    <string name="alert_channel_name">台风紧急预警（非官方）</string>
+    <string name="alert_channel_desc">非官方转发的台风预警信号与高强度提示；请以当地气象部门为准</string>
     <string name="alert_group_summary">%1$d 条台风预警</string>
     <string name="alert_settings_title">紧急预警通知</string>
-    <string name="alert_settings_on">收到台风相关官方预警或强台风紧急提示时立即通知</string>
+    <string name="alert_settings_on">收到转发的台风预警或强台风提示时立即通知（非官方）；请以当地气象部门为准</string>
     <string name="alert_settings_off">关闭后不再推送紧急预警通知</string>
     <string name="alert_settings_need_permission">已开启，但需授予通知权限后才会推送</string>
     <string name="alert_send_demo">发送测试预警</string>
@@ -306,7 +306,7 @@
     <string name="demo_hagupit_name">黑格比</string>
     <!-- TYP-58: one-time notice for upgraders; location alerts are now opt-in -->
     <string name="location_opt_in_notice_title">基于定位推送需要手动开启</string>
-    <string name="location_opt_in_notice_body">%1$s 不再默认使用你的位置。基于定位推送（距离提醒和你附近的官方预警）在你手动开启前保持关闭，之后也可以随时在设置里更改。</string>
+    <string name="location_opt_in_notice_body">%1$s 不再默认使用你的位置。基于定位推送（距离提醒和你附近的预警信息，非官方）在你手动开启前保持关闭，之后也可以随时在设置里更改。</string>
     <string name="location_opt_in_notice_turn_on">去开启</string>
     <string name="location_opt_in_notice_dismiss">暂不</string>
 </resources>
