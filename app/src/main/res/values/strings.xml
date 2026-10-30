@@ -199,7 +199,7 @@
     <string name="map_basemap_open">国际</string>
     <string name="cd_map_basemap_option">地图底图：%1$s</string>
     <string name="map_badge_amap">高德地图</string>
-    <string name="map_badge_open">OpenStreetMap</string>
+    <string name="map_badge_open">OpenFreeMap © OpenMapTiles Data from OpenStreetMap</string>
     <string name="cd_map_provider_badge">当前底图：%1$s</string>
     <string name="about_tagline">%1$s · 西太平洋台风路径与预警</string>
     <!-- %1$s is version_label, e.g. "版本 1.0" -->
@@ -212,6 +212,7 @@
     <string name="timeline_pressure">气压 %1$s hPa</string>
     <string name="timeline_intensity">强度 %1$s</string>
     <string name="timeline_move">移动 %1$s</string>
+    <string name="move_speed_value">%1$s 公里/小时</string>
     <string name="share_header">【台风眼】%1$s（%2$s）</string>
     <string name="share_header_name_only">【台风眼】%1$s</string>
     <string name="share_id">编号：%1$s</string>

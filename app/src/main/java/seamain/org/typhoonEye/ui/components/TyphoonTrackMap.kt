@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -303,9 +305,9 @@ fun TyphoonTrackMap(
                                 map.uiSettings.isAttributionEnabled = true
                                 map.uiSettings.isCompassEnabled = true
                                 map.uiSettings.setAllGesturesEnabled(true)
-                                // Keep attribution clear of our bottom-start badge.
+                                // Keep the MapLibre (i) clear of the taller OpenFreeMap credit badge.
                                 runCatching {
-                                    map.uiSettings.setAttributionMargins(12, 0, 12, 36)
+                                    map.uiSettings.setAttributionMargins(12, 0, 12, 120)
                                 }
 
                                 fun bindStyle(style: Style) {
@@ -413,6 +415,7 @@ fun TyphoonTrackMap(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = 10.dp, bottom = 10.dp)
+                    .widthIn(max = 280.dp)
             )
         }
     }
@@ -432,13 +435,10 @@ private fun MapProviderBadge(
         ResolvedBasemap.OpenStreet -> Icons.Outlined.Public
     }
     val cd = stringResource(R.string.cd_map_provider_badge, label)
-    Surface(
-        modifier = modifier.semantics { contentDescription = cd },
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        tonalElevation = 2.dp,
-        shadowElevation = 2.dp
-    ) {
+    val openLink = basemap == ResolvedBasemap.OpenStreet
+    val uriHandler = LocalUriHandler.current
+    val badgeColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -456,6 +456,24 @@ private fun MapProviderBadge(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+    }
+    if (openLink) {
+        Surface(
+            onClick = { runCatching { uriHandler.openUri(OpenFreeMap.HOME_URL) } },
+            modifier = modifier.semantics { contentDescription = cd },
+            shape = RoundedCornerShape(20.dp),
+            color = badgeColor,
+            tonalElevation = 2.dp,
+            shadowElevation = 2.dp
+        ) { content() }
+    } else {
+        Surface(
+            modifier = modifier.semantics { contentDescription = cd },
+            shape = RoundedCornerShape(20.dp),
+            color = badgeColor,
+            tonalElevation = 2.dp,
+            shadowElevation = 2.dp
+        ) { content() }
     }
 }
 
