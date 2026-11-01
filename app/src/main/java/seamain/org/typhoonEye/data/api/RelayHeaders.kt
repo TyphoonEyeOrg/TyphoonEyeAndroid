@@ -16,6 +16,8 @@ object RelayHeaders {
 
     const val JUHE_ACTIVE_SUFFIX = "fapigw/typhoon/active"
     const val QWEATHER_LIST_SUFFIX = "v7/tropical/storm-list"
+    const val QWEATHER_TRACK_SUFFIX = "v7/tropical/storm-track"
+    const val QWEATHER_FORECAST_SUFFIX = "v7/tropical/storm-forecast"
 
     /** A daily budget wait is at most a day; cap a bogus header so it cannot lock refresh for years. */
     private const val MAX_DELAY_SECONDS = 48L * 60 * 60

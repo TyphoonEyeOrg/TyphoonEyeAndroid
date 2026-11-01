@@ -66,6 +66,7 @@
     <string name="direction_nee">東北偏東</string>
     <string name="direction_sww">西南偏西</string>
     <string name="direction_see">東南偏東</string>
+    <string name="unit_speed_kmh">%1$s 公里/小時</string>
     <string name="display_name_low_id">低壓 %1$s</string>
     <string name="display_name_active_fallback">活躍颱風</string>
     <string name="power_level_format">%1$s級</string>
@@ -196,7 +197,7 @@
     <string name="map_basemap_open">國際</string>
     <string name="cd_map_basemap_option">地圖底圖：%1$s</string>
     <string name="map_badge_amap">高德地圖</string>
-    <string name="map_badge_open">OpenStreetMap</string>
+    <string name="map_badge_open">OpenFreeMap © OpenMapTiles Data from OpenStreetMap</string>
     <string name="cd_map_provider_badge">而家底圖：%1$s</string>
     <string name="about_tagline">%1$s · 西太平洋颱風路徑同預警</string>
     <string name="track_map_title">路徑地圖</string>

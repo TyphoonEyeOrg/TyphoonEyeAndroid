@@ -180,8 +180,10 @@ fun TyphoonPoint.moveLabel(context: Context): String =
             when {
                 speed.contains("km", ignoreCase = true) ||
                     speed.contains("公里") ||
-                    speed.contains("千米") -> speed
-                else -> "$speed km/h"
+                    speed.contains("千米") ||
+                    speed.contains("小时") ||
+                    speed.contains("小時") -> speed
+                else -> context.getString(R.string.unit_speed_kmh, speed)
             }
         }
     ).filterNotNull().joinToString(" · ").ifBlank { "—" }

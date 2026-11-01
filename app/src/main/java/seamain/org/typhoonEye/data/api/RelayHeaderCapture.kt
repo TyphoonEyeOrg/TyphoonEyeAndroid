@@ -3,6 +3,7 @@ package seamain.org.typhoonEye.data.api
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,7 +15,8 @@ import javax.inject.Singleton
  * can [record] a snapshot directly because mocked APIs never touch OkHttp.
  *
  * Paths are distinct (`…/typhoon/active` vs `…/storm-list`), so a detail call cannot
- * overwrite the list snapshot the repository is about to read.
+ * overwrite the list snapshot the repository is about to read. Several storms can
+ * hit `storm-track` at once, so each path keeps a queue instead of one slot.
  */
 @Singleton
 class RelayHeaderCapture @Inject constructor() {
@@ -23,17 +25,22 @@ class RelayHeaderCapture @Inject constructor() {
         val retryAfter: String? = null
     )
 
-    private val byPath = ConcurrentHashMap<String, Snapshot>()
+    private val byPath = ConcurrentHashMap<String, ConcurrentLinkedQueue<Snapshot>>()
 
     fun record(encodedPath: String, stale: Boolean, retryAfter: String?) {
-        byPath[encodedPath] = Snapshot(stale = stale, retryAfter = retryAfter)
+        byPath.computeIfAbsent(encodedPath) { ConcurrentLinkedQueue() }
+            .add(Snapshot(stale = stale, retryAfter = retryAfter))
     }
 
-    /** Removes and returns the snapshot whose path ends with [suffix], if one was recorded. */
+    /** Removes and returns the oldest snapshot whose path ends with [suffix], if one was recorded. */
     fun consumeEndingWith(suffix: String): Snapshot? {
         val normalized = suffix.trim('/')
-        val key = byPath.keys.firstOrNull { path -> path.trim('/').endsWith(normalized) } ?: return null
-        return byPath.remove(key)
+        for (key in byPath.keys) {
+            if (!key.trim('/').endsWith(normalized)) continue
+            val snap = byPath[key]?.poll() ?: continue
+            return snap
+        }
+        return null
     }
 }
 

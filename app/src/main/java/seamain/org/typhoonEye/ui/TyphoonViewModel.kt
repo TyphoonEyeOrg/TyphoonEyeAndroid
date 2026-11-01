@@ -53,6 +53,7 @@ import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.localizeIntensityLabel
+import seamain.org.typhoonEye.ui.util.moveLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -664,10 +665,15 @@ class TyphoonViewModel @Inject constructor(
                 appendLine(
                     appContext.getString(
                         R.string.share_move,
-                        "${last.moveDirection} ${last.moveSpeed}".trim()
+                        last.moveLabel(appContext)
                     )
                 )
-                appendLine(appContext.getString(R.string.share_observed_time, last.time))
+                appendLine(
+                    appContext.getString(
+                        R.string.share_observed_time,
+                        formatObservationTime(last.time, context = appContext)
+                    )
+                )
             }
             if (typhoon.forecastText.isNotBlank()) {
                 appendLine(appContext.getString(R.string.share_forecast, typhoon.forecastText))

@@ -32,9 +32,10 @@ enum class MapBasemap {
  * International basemap: OpenFreeMap public instance (https://openfreemap.org).
  * No API key, no registration. Its terms allow the public instance to stop without
  * notice, so the style URL lives only here; change [STYLES_BASE_URL] to switch.
- * Attribution comes from the style's sources and MapLibre shows it automatically.
+ * The map chip shows the required credit and opens [HOME_URL].
  */
 object OpenFreeMap {
+    const val HOME_URL = "https://openfreemap.org"
     const val STYLES_BASE_URL = "https://tiles.openfreemap.org/styles/"
     const val LIGHT_STYLE = "liberty"
     const val DARK_STYLE = "dark"
@@ -47,6 +48,12 @@ object OpenFreeMap {
 enum class ResolvedBasemap {
     Amap,
     OpenStreet
+}
+
+/** Chip link. OpenFreeMap requires a visible, tappable credit; Amap keeps a plain label. */
+fun basemapAttributionUrl(basemap: ResolvedBasemap): String? = when (basemap) {
+    ResolvedBasemap.OpenStreet -> OpenFreeMap.HOME_URL
+    ResolvedBasemap.Amap -> null
 }
 
 object MapBasemapPolicy {

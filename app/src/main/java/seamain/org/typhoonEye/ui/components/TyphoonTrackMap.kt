@@ -6,12 +6,14 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +39,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -72,6 +76,7 @@ import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.MapBasemapPolicy
 import seamain.org.typhoonEye.ui.util.OpenFreeMap
 import seamain.org.typhoonEye.ui.util.ResolvedBasemap
+import seamain.org.typhoonEye.ui.util.basemapAttributionUrl
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -432,8 +437,19 @@ private fun MapProviderBadge(
         ResolvedBasemap.OpenStreet -> Icons.Outlined.Public
     }
     val cd = stringResource(R.string.cd_map_provider_badge, label)
+    val attributionUrl = basemapAttributionUrl(basemap)
+    val uriHandler = LocalUriHandler.current
+    val clickable = if (attributionUrl != null) {
+        Modifier.clickable(role = Role.Button) {
+            runCatching { uriHandler.openUri(attributionUrl) }
+        }
+    } else {
+        Modifier
+    }
     Surface(
-        modifier = modifier.semantics { contentDescription = cd },
+        modifier = modifier
+            .then(clickable)
+            .semantics { contentDescription = cd },
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         tonalElevation = 2.dp,
@@ -452,8 +468,10 @@ private fun MapProviderBadge(
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                modifier = Modifier.widthIn(max = 240.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3
             )
         }
     }

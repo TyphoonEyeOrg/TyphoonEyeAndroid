@@ -70,6 +70,7 @@
     <string name="direction_nee">ENE</string>
     <string name="direction_sww">WSW</string>
     <string name="direction_see">ESE</string>
+    <string name="unit_speed_kmh">%1$s km/h</string>
     <string name="display_name_low_id">Depression %1$s</string>
     <string name="display_name_active_fallback">Active typhoon</string>
     <string name="power_level_format">Force %1$s</string>
@@ -200,7 +201,7 @@
     <string name="map_basemap_open">International</string>
     <string name="cd_map_basemap_option">Map basemap: %1$s</string>
     <string name="map_badge_amap">Amap</string>
-    <string name="map_badge_open">OpenStreetMap</string>
+    <string name="map_badge_open">OpenFreeMap © OpenMapTiles Data from OpenStreetMap</string>
     <string name="cd_map_provider_badge">Basemap: %1$s</string>
     <string name="about_tagline">%1$s · Western Pacific tracks and warnings</string>
     <string name="track_map_title">Track map</string>

@@ -91,6 +91,22 @@ class RelayHttpTest {
     }
 
     @Test
+    fun capture_queuesConcurrentResponsesForTheSamePath() {
+        val capture = RelayHeaderCapture()
+        val path = "/v1/qweather/${RelayHeaders.QWEATHER_TRACK_SUFFIX}"
+        capture.record(path, stale = true, retryAfter = null)
+        capture.record(path, stale = false, retryAfter = "15")
+
+        val first = capture.consumeEndingWith(RelayHeaders.QWEATHER_TRACK_SUFFIX)
+        assertEquals(true, first?.stale)
+        assertNull(first?.retryAfter)
+        val second = capture.consumeEndingWith(RelayHeaders.QWEATHER_TRACK_SUFFIX)
+        assertEquals(false, second?.stale)
+        assertEquals("15", second?.retryAfter)
+        assertNull(capture.consumeEndingWith(RelayHeaders.QWEATHER_TRACK_SUFFIX))
+    }
+
+    @Test
     fun worker_doesNotHardRetryWhileRetryAfterIsActive() {
         val waiting = listOf(
             SourceFailure(DataSource.Juhe, SourceFailureKind.RelayBusy, code = "429", retryAfterEpochMs = now + 60_000),
