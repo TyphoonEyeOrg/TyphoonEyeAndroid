@@ -119,6 +119,88 @@ class StormNamesTest {
         assertEquals("蔷琵", e.zhHans)
         assertEquals("薔琵", e.zhHantTW)
         assertEquals("薔琵", e.zhHK)
+        // Not Chan-hom (灿鸿 / 昌鴻 / 燦鴻), and not the name Champi replaced.
+        assertEquals("灿鸿", StormNames.find("Chan-hom")!!.zhHans)
+        assertEquals("凯萨娜", StormNames.find("Ketsana")!!.zhHans)
+        assertTrue(StormNames.find("Ketsana")!!.retired)
+        assertFalse(e.retired)
+    }
+
+    /**
+     * #47: delisted set is the NMC「2000年以来被除名」table (list effective 2026-06-08).
+     * zh-TW and yue stay empty so display falls back to the data-source Chinese name.
+     */
+    @Test fun delisted_names_match_nmc_and_leave_tw_yue_empty() {
+        val expected = mapOf(
+            "Hanuman" to "翰文", "Sarika" to "莎莉嘉", "Kodo" to "库都", "Hato" to "天鸽",
+            "Chataan" to "查特安", "Kai-tak" to "启德", "Imbudo" to "伊布都", "Tembin" to "天秤",
+            "Rusa" to "鹿莎", "Mangkhut" to "山竹", "Vamei" to "画眉", "Rumbia" to "温比亚",
+            "Maemi" to "鸣蝉", "Faxai" to "法茜", "Pongsona" to "凤仙", "Hagibis" to "海贝思",
+            "Rananim" to "云娜", "Kammuri" to "北冕", "Sudal" to "苏特", "Lekima" to "利奇马",
+            "Tingting" to "婷婷", "Phanfone" to "巴蓬", "Yanyan" to "欣欣", "Yutu" to "玉兔",
+            "Longwang" to "龙王", "Goni" to "天鹅", "Matsa" to "麦莎", "Linfa" to "莲花",
+            "Nabi" to "彩蝶", "Molave" to "莫拉菲", "Bilis" to "碧利斯", "Vamco" to "环高",
+            "Chanchu" to "珍珠", "Vongfong" to "黄蜂", "Durian" to "榴莲", "Conson" to "康森",
+            "Saomai" to "桑美", "Hinnamnor" to "轩岚诺", "Xangsane" to "象神", "Kompasu" to "圆规",
+            "Ketsana" to "凯萨娜", "Ma-on" to "马鞍", "Morakot" to "莫拉克", "Malakas" to "马勒卡",
+            "Parma" to "芭玛", "Megi" to "鲇鱼", "Fanapi" to "凡亚比", "Nalgae" to "尼格",
+            "Washi" to "天鹰", "Noru" to "奥鹿", "Bopha" to "宝霞", "Rai" to "雷伊",
+            "Fitow" to "菲特", "Doksuri" to "杜苏芮", "Haiyan" to "海燕", "Haikui" to "海葵",
+            "Sonamu" to "清松", "Saola" to "苏拉", "Utor" to "尤特", "Ewiniar" to "艾云尼",
+            "Vicente" to "韦森特", "Jebi" to "飞燕", "Rammasun" to "威马逊", "Kong-rey" to "康妮",
+            "Koppu" to "巨爵", "Krathon" to "山陀儿", "Melor" to "茉莉", "Man-yi" to "万宜",
+            "Mujigae" to "彩虹", "Toraji" to "桃芝", "Soudelor" to "苏迪罗", "Trami" to "潭美",
+            "Haima" to "海马", "Usagi" to "天兔", "Meranti" to "莫兰蒂", "Yagi" to "摩羯",
+            "Nockten" to "洛坦",
+        )
+        val retired = StormNames.index.file.entries.filter { it.retired }
+        assertEquals(expected.keys, retired.map { it.en }.toSet())
+        retired.forEach { e ->
+            assertEquals(e.en, expected[e.en], e.zhHans)
+            assertNull(e.en, e.zhHantTW)
+            assertNull(e.en, e.zhHK)
+            assertEquals(e.en, "nmc", e.sources.zhHans)
+            assertNull(e.en, e.sources.zhHantTW)
+            assertNull(e.en, e.sources.zhHK)
+        }
+    }
+
+    @Test fun delisted_empty_columns_fall_back_to_data_source_chinese() {
+        // CMA is 康妮. CWA's 康芮 is not on the current CWA list, so the columns stay empty
+        // and Traditional / Cantonese show the Chinese string the data source sent.
+        val fromCma = juhe("康妮", "KONG-REY")
+        assertEquals("康妮", fromCma.localizedName(AppLanguage.ZhHans))
+        assertEquals("康妮", fromCma.localizedName(AppLanguage.ZhHant))
+        assertEquals("康妮", fromCma.localizedName(AppLanguage.Yue))
+        val fromOtherSource = juhe("康芮", "KONG-REY")
+        assertEquals("康妮", fromOtherSource.localizedName(AppLanguage.ZhHans))
+        assertEquals("康芮", fromOtherSource.localizedName(AppLanguage.ZhHant))
+        assertEquals("康芮", fromOtherSource.localizedName(AppLanguage.Yue))
+    }
+
+    @Test fun delisted_chinese_is_not_the_replacement_name() {
+        mapOf(
+            "Ketsana" to "Champi", "Yagi" to "Tomo", "Kong-rey" to "Koki", "Toraji" to "Gaeguri",
+            "Ewiniar" to "Tirou", "Usagi" to "Hebi", "Man-yi" to "Dim-sum", "Trami" to "Hoaban",
+            "Krathon" to "Burapha", "Jebi" to "Narae", "Nockten" to "Hinnamnor",
+        ).forEach { (old, replacement) ->
+            val retired = StormNames.find(old)!!
+            val successor = StormNames.find(replacement)!!
+            assertTrue(old, retired.retired)
+            assertFalse("$old vs $replacement", retired.zhHans == successor.zhHans)
+        }
+    }
+
+    @Test fun tc58_approved_retirements_stay_on_the_operational_list() {
+        // Session 58 (March 2026) approved retirement; replacements are not adopted yet.
+        // NMC (effective 2026-06-08), HKO tcname2026, JMA and the Committee list still include them.
+        listOf("Wipha", "Co-may", "Matmo", "Mitag", "Ragasa", "Bualoi", "Kalmaegi", "Fung-wong").forEach { en ->
+            val e = StormNames.find(en)!!
+            assertFalse(en, e.retired)
+            assertFalse(en, e.zhHans.isNullOrBlank())
+            assertFalse(en, e.zhHantTW.isNullOrBlank())
+            assertFalse(en, e.zhHK.isNullOrBlank())
+        }
     }
 
     @Test fun json_parses_on_jvm_with_schema() {
