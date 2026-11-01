@@ -1,11 +1,14 @@
 package seamain.org.typhoonEye
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -796,6 +799,208 @@ class TyphoonRepositoryTest {
         assertTrue(result.isSuccess)
         verify(juheApi, never()).getTyphoonDetail(any(), any())
         verify(qWeatherApi, never()).getStormTrack(any())
+    }
+
+    @Test
+    fun `qweather with no active storms does not request track or forecast`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "limit reached", errorCode = 10012, result = null)
+        ))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
+            QWeatherStormListResponse(
+                code = "200",
+                storm = listOf(
+                    QWeatherStormInfo(id = "NP_2601", name = "洛鞍", isActive = "0")
+                )
+            )
+        ))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertTrue(feed.typhoons.isEmpty())
+        verify(qWeatherApi, never()).getStormTrack(any())
+        verify(qWeatherApi, never()).getStormForecast(any())
+    }
+
+    @Test
+    fun `one qweather storm failure still returns the others`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "limit reached", errorCode = 10012, result = null)
+        ))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
+            QWeatherStormListResponse(
+                code = "200",
+                storm = listOf(
+                    QWeatherStormInfo(id = "NP_OK", name = "巴威", isActive = "1"),
+                    QWeatherStormInfo(id = "NP_BAD", name = "美莎克", isActive = "1")
+                )
+            )
+        ))
+        whenever(qWeatherApi.getStormTrack("NP_OK")).thenReturn(httpOk(
+            QWeatherStormTrackResponse(
+                code = "200",
+                isActive = "1",
+                track = listOf(
+                    QWeatherTrackPoint(
+                        time = "2026-07-10T14:00+08:00",
+                        lat = "21.8",
+                        lon = "126.9",
+                        type = "TY",
+                        pressure = "960",
+                        windSpeed = "40"
+                    )
+                )
+            )
+        ))
+        whenever(qWeatherApi.getStormTrack("NP_BAD")).thenThrow(IllegalStateException("track failed"))
+        whenever(qWeatherApi.getStormForecast(any())).thenReturn(httpOk(
+            QWeatherStormForecastResponse(code = "200", forecast = emptyList())
+        ))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+        val byId = feed.typhoons.associateBy { it.id }
+
+        assertEquals(setOf("NP_OK", "NP_BAD"), byId.keys)
+        assertEquals(1, byId.getValue("NP_OK").points.size)
+        assertTrue(byId.getValue("NP_BAD").points.isEmpty())
+        verify(qWeatherApi).getStormForecast("NP_OK")
+        verify(qWeatherApi).getStormForecast("NP_BAD")
+    }
+
+    @Test
+    fun `parallel qweather detail keeps stale flag and Retry-After`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "limit reached", errorCode = 10012, result = null)
+        ))
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(httpOk(
+            QWeatherStormListResponse(
+                code = "200",
+                storm = listOf(
+                    QWeatherStormInfo(id = "NP_STALE", name = "巴威", isActive = "1"),
+                    QWeatherStormInfo(id = "NP_LIMIT", name = "美莎克", isActive = "1")
+                )
+            )
+        ))
+        whenever(qWeatherApi.getStormTrack("NP_STALE")).thenReturn(httpOk(
+            QWeatherStormTrackResponse(
+                code = "200",
+                isActive = "1",
+                track = listOf(
+                    QWeatherTrackPoint(
+                        time = "2026-07-10T14:00+08:00",
+                        lat = "21.8",
+                        lon = "126.9",
+                        type = "TY",
+                        pressure = "960",
+                        windSpeed = "40"
+                    )
+                )
+            ),
+            "X-Relay-Stale",
+            "1"
+        ))
+        whenever(qWeatherApi.getStormTrack("NP_LIMIT")).thenReturn(httpError(429, "120"))
+        whenever(qWeatherApi.getStormForecast(any())).thenReturn(httpOk(
+            QWeatherStormForecastResponse(code = "200")
+        ))
+
+        val feed = repository.getActiveTyphoons().getOrThrow()
+
+        assertEquals(2, feed.typhoons.size)
+        assertTrue(feed.fromCache)
+        assertEquals(RelayLimitKind.Busy, feed.relayLimit)
+        assertEquals(nowMs + 120_000, feed.retryAfterUntilEpochMs)
+        assertEquals(nowMs + 120_000, syncStore.relayRetryAfterUntilMs)
+        assertEquals(RelayLimitKind.Busy, syncStore.relayLimit)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `qweather track and forecast stay within three in flight`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "limit reached", errorCode = 10012, result = null)
+        ))
+        val gate = QWeatherGate()
+        val repo = DefaultTyphoonRepository(
+            juheApi = juheApi,
+            qWeatherApi = gate,
+            juheKey = juheKey,
+            qWeatherAuth = auth(configured = true),
+            localDataSource = localDataSource,
+            syncStore = syncStore,
+            clock = clock
+        )
+
+        val load = async { repo.getActiveTyphoons() }
+        advanceUntilIdle()
+
+        assertEquals(3, gate.started.get())
+        assertEquals(3, gate.maxInFlight.get())
+        assertEquals(3, gate.inFlight.get())
+
+        gate.release.complete(Unit)
+        val feed = load.await().getOrThrow()
+
+        assertEquals(4, feed.typhoons.size)
+        assertEquals(8, gate.started.get())
+        assertTrue(gate.maxInFlight.get() <= 3)
+        assertEquals(0, gate.inFlight.get())
+    }
+
+    private inner class QWeatherGate : QWeatherTyphoonApi {
+        val inFlight = AtomicInteger(0)
+        val maxInFlight = AtomicInteger(0)
+        val started = AtomicInteger(0)
+        val release = CompletableDeferred<Unit>()
+        private val ids = listOf("NP_2601", "NP_2602", "NP_2603", "NP_2604")
+
+        override suspend fun getStormList(
+            basin: String,
+            year: String
+        ): Response<QWeatherStormListResponse> = httpOk(
+            QWeatherStormListResponse(
+                code = "200",
+                storm = ids.map { id ->
+                    QWeatherStormInfo(id = id, name = id, isActive = "1")
+                }
+            )
+        )
+
+        override suspend fun getStormTrack(stormId: String): Response<QWeatherStormTrackResponse> {
+            occupy()
+            return httpOk(
+                QWeatherStormTrackResponse(
+                    code = "200",
+                    isActive = "1",
+                    track = listOf(
+                        QWeatherTrackPoint(
+                            time = "2026-07-10T14:00+08:00",
+                            lat = "21.8",
+                            lon = "126.9",
+                            type = "TY",
+                            pressure = "960",
+                            windSpeed = "40"
+                        )
+                    )
+                )
+            )
+        }
+
+        override suspend fun getStormForecast(stormId: String): Response<QWeatherStormForecastResponse> {
+            occupy()
+            return httpOk(QWeatherStormForecastResponse(code = "200"))
+        }
+
+        private suspend fun occupy() {
+            val now = inFlight.incrementAndGet()
+            maxInFlight.updateAndGet { peak -> maxOf(peak, now) }
+            started.incrementAndGet()
+            try {
+                release.await()
+            } finally {
+                inFlight.decrementAndGet()
+            }
+        }
     }
 
     // endregion

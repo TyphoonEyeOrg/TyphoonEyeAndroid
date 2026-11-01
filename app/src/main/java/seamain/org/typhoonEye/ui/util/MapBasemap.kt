@@ -29,12 +29,14 @@ enum class MapBasemap {
 }
 
 /**
- * International basemap: OpenFreeMap public instance (https://openfreemap.org).
+ * International basemap: OpenFreeMap public instance ([HOME_URL]).
  * No API key, no registration. Its terms allow the public instance to stop without
  * notice, so the style URL lives only here; change [STYLES_BASE_URL] to switch.
- * Attribution comes from the style's sources and MapLibre shows it automatically.
+ * The map badge shows the required credit and opens [HOME_URL]. MapLibre's own
+ * attribution control stays enabled as well.
  */
 object OpenFreeMap {
+    const val HOME_URL = "https://openfreemap.org"
     const val STYLES_BASE_URL = "https://tiles.openfreemap.org/styles/"
     const val LIGHT_STYLE = "liberty"
     const val DARK_STYLE = "dark"

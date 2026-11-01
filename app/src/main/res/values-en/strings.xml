@@ -199,7 +199,7 @@
     <string name="map_basemap_open">International</string>
     <string name="cd_map_basemap_option">Map basemap: %1$s</string>
     <string name="map_badge_amap">Amap</string>
-    <string name="map_badge_open">OpenStreetMap</string>
+    <string name="map_badge_open">OpenFreeMap © OpenMapTiles Data from OpenStreetMap</string>
     <string name="cd_map_provider_badge">Basemap: %1$s</string>
     <string name="about_tagline">%1$s · Western Pacific tracks and warnings</string>
     <string name="track_map_title">Track map</string>
@@ -211,6 +211,7 @@
     <string name="timeline_pressure">Pressure %1$s hPa</string>
     <string name="timeline_intensity">Intensity %1$s</string>
     <string name="timeline_move">Motion %1$s</string>
+    <string name="move_speed_value">%1$s km/h</string>
     <string name="share_header">[Typhoon Eye] %1$s (%2$s)</string>
     <string name="share_header_name_only">[Typhoon Eye] %1$s</string>
     <string name="share_id">ID: %1$s</string>

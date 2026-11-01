@@ -19,6 +19,11 @@ class OpenFreeMapBasemapTest {
     }
 
     @Test
+    fun homeUrl_isThePublicInstance() {
+        assertEquals("https://openfreemap.org", OpenFreeMap.HOME_URL)
+    }
+
+    @Test
     fun styleUrl_isHttpsAndKeyless() {
         listOf(true, false).forEach { dark ->
             val url = OpenFreeMap.styleUrl(dark)

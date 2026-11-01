@@ -11,6 +11,9 @@ import seamain.org.typhoonEye.domain.names.NameColumn
 import seamain.org.typhoonEye.domain.names.StormNames
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.theme.IntensitySts
 import seamain.org.typhoonEye.ui.theme.IntensitySty
 import seamain.org.typhoonEye.ui.theme.IntensitySuper
@@ -181,10 +184,64 @@ fun TyphoonPoint.moveLabel(context: Context): String =
                 speed.contains("km", ignoreCase = true) ||
                     speed.contains("公里") ||
                     speed.contains("千米") -> speed
-                else -> "$speed km/h"
+                else -> context.getString(R.string.move_speed_value, speed.trim())
             }
         }
     ).filterNotNull().joinToString(" · ").ifBlank { "—" }
+
+/**
+ * Plain-text storm summary for the share sheet.
+ * Movement uses [moveLabel] (localized direction and speed unit). The observation
+ * clock is [formatObservationTime], which converts zoned timestamps into the device zone.
+ */
+fun Typhoon.shareText(context: Context, userLocation: UserLocation? = null): String {
+    val last = points.lastOrNull()
+    return buildString {
+        val en = englishName.trim()
+        val title = displayName(context)
+        appendLine(
+            if (en.isBlank() || en.equals(title.trim(), ignoreCase = true)) {
+                context.getString(R.string.share_header_name_only, title)
+            } else {
+                context.getString(R.string.share_header, title, en)
+            }
+        )
+        appendLine(context.getString(R.string.share_id, id))
+        if (strong.isNotBlank()) {
+            appendLine(
+                context.getString(
+                    R.string.share_intensity,
+                    localizeIntensityLabel(context, strong)
+                )
+            )
+        }
+        if (positionDesc.isNotBlank()) {
+            appendLine(context.getString(R.string.share_position, positionDesc))
+        }
+        distanceKmFrom(userLocation)?.let { km ->
+            appendLine(context.getString(R.string.distance_from_you, km.roundKm()))
+        }
+        if (last != null) {
+            appendLine(
+                context.getString(
+                    R.string.share_wind_pressure,
+                    last.speed,
+                    last.pressure
+                )
+            )
+            appendLine(context.getString(R.string.share_move, last.moveLabel(context)))
+            appendLine(
+                context.getString(
+                    R.string.share_observed_time,
+                    formatObservationTime(last.time, context = context)
+                )
+            )
+        }
+        if (forecastText.isNotBlank()) {
+            appendLine(context.getString(R.string.share_forecast, forecastText))
+        }
+    }.trim()
+}
 
 fun formatPressure(hPa: Int): String = "$hPa hPa"
 

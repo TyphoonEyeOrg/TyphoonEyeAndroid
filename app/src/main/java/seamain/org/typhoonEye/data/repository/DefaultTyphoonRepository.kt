@@ -2,8 +2,14 @@ package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import retrofit2.Response
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
@@ -14,6 +20,7 @@ import seamain.org.typhoonEye.data.api.relayLimitKind
 import seamain.org.typhoonEye.data.api.RELAY_STALE_HEADER
 import seamain.org.typhoonEye.data.api.RETRY_AFTER_HEADER
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
+import seamain.org.typhoonEye.data.model.QWeatherStormInfo
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
@@ -38,6 +45,9 @@ import javax.inject.Named
  * 4) Status is resolved client-side ([TyphoonActivity]): no observation for 24 h → dissipated.
  * 5) HTTP 429/503 and `Retry-After` hold the next refresh (including pull-to-refresh and the
  *    live-update worker) until the header elapses. `X-Relay-Stale: 1` is cached data, not live.
+ * 6) QWeather track and forecast calls run together, at most [QWEATHER_MAX_IN_FLIGHT] at once.
+ *    One storm's failure does not drop the others. Those calls still record 429/503,
+ *    `Retry-After`, and `X-Relay-Stale` on [FeedSyncStore].
  */
 class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
@@ -63,6 +73,11 @@ class DefaultTyphoonRepository @Inject constructor(
         val typhoons: List<Typhoon>? = null,
         val error: String? = null,
         val stale: Boolean = false
+    )
+
+    private class QWeatherStormPiece(
+        val typhoon: Typhoon,
+        val stale: Boolean
     )
 
     private class RemoteList(
@@ -410,35 +425,79 @@ class DefaultTyphoonRepository @Inject constructor(
                 return FetchOutcome(typhoons = emptyList(), stale = relay.stale)
             }
 
-            var stale = relay.stale
-            val typhoons = activeStorms.map { storm ->
-                val trackHttp = runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
-                val trackRelay = trackHttp?.relayHttp()
-                if (trackRelay?.stale == true) stale = true
-                if (trackRelay?.limit != null) {
-                    rememberRelayThrottle(trackRelay.limit, trackRelay.retryAfterUntilMs)
-                }
-                val forecastHttp = runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
-                val forecastRelay = forecastHttp?.relayHttp()
-                if (forecastRelay?.stale == true) stale = true
-                if (forecastRelay?.limit != null) {
-                    rememberRelayThrottle(forecastRelay.limit, forecastRelay.retryAfterUntilMs)
-                }
-                val track = trackHttp?.takeIf { it.isSuccessful }?.body()
-                val forecast = forecastHttp?.takeIf { it.isSuccessful }?.body()
-                storm.toDomain(
-                    track = track?.track.orEmpty(),
-                    now = track?.now,
-                    forecast = forecast?.forecast.orEmpty()
-                )
+            val permits = Semaphore(QWEATHER_MAX_IN_FLIGHT)
+            val pieces = supervisorScope {
+                activeStorms.map { storm ->
+                    async { fetchQWeatherStorm(storm, permits) }
+                }.awaitAll()
             }
-            Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
-            FetchOutcome(typhoons = typhoons, stale = stale)
+            Log.d(tag, "Fetched ${pieces.size} storm(s) from QWeather")
+            FetchOutcome(
+                typhoons = pieces.map { it.typhoon },
+                stale = relay.stale || pieces.any { it.stale }
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
             FetchOutcome(error = "和风请求失败: ${e.message}")
+        }
+    }
+
+    /**
+     * Track and forecast share [permits] with every other active storm, so at most
+     * [QWEATHER_MAX_IN_FLIGHT] QWeather calls are on the wire. A failure here becomes
+     * a list-only storm; it does not cancel its siblings or the list.
+     */
+    private suspend fun fetchQWeatherStorm(
+        storm: QWeatherStormInfo,
+        permits: Semaphore
+    ): QWeatherStormPiece {
+        return try {
+            val (trackHttp, forecastHttp) = coroutineScope {
+                val trackDeferred = async {
+                    permits.withPermit {
+                        runCatchingCancellable { qWeatherApi.getStormTrack(storm.id) }.getOrNull()
+                    }
+                }
+                val forecastDeferred = async {
+                    permits.withPermit {
+                        runCatchingCancellable { qWeatherApi.getStormForecast(storm.id) }.getOrNull()
+                    }
+                }
+                trackDeferred.await() to forecastDeferred.await()
+            }
+            var stale = false
+            trackHttp?.relayHttp()?.let { relay ->
+                if (relay.stale) stale = true
+                if (relay.limit != null) {
+                    rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+                }
+            }
+            forecastHttp?.relayHttp()?.let { relay ->
+                if (relay.stale) stale = true
+                if (relay.limit != null) {
+                    rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+                }
+            }
+            val track = trackHttp?.takeIf { it.isSuccessful }?.body()
+            val forecast = forecastHttp?.takeIf { it.isSuccessful }?.body()
+            QWeatherStormPiece(
+                typhoon = storm.toDomain(
+                    track = track?.track.orEmpty(),
+                    now = track?.now,
+                    forecast = forecast?.forecast.orEmpty()
+                ),
+                stale = stale
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(tag, "QWeather storm ${storm.id} failed", e)
+            QWeatherStormPiece(
+                typhoon = storm.toDomain(track = emptyList(), now = null, forecast = emptyList()),
+                stale = false
+            )
         }
     }
 
@@ -567,5 +626,8 @@ class DefaultTyphoonRepository @Inject constructor(
         const val LIST_TTL_MS: Long = 10L * 60 * 1000
         const val MIN_FORCE_INTERVAL_MS: Long = 60L * 1000
         const val DETAIL_TTL_MS: Long = 30L * 60 * 1000
+
+        /** Track and forecast requests in one QWeather list fetch. */
+        const val QWEATHER_MAX_IN_FLIGHT: Int = 3
     }
 }

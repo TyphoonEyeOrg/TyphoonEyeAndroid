@@ -34,8 +34,6 @@ import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
-import seamain.org.typhoonEye.domain.util.distanceKmFrom
-import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonAlertNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
@@ -44,7 +42,7 @@ import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatObservationTime
-import seamain.org.typhoonEye.ui.util.localizeIntensityLabel
+import seamain.org.typhoonEye.ui.util.shareText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -548,54 +546,8 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
-    fun shareSummary(typhoon: Typhoon): String {
-        val last = typhoon.points.lastOrNull()
-        return buildString {
-            val en = typhoon.englishName.trim()
-            val title = typhoon.displayName(appContext)
-            appendLine(
-                if (en.isBlank() || en.equals(title.trim(), ignoreCase = true)) {
-                    appContext.getString(R.string.share_header_name_only, title)
-                } else {
-                    appContext.getString(R.string.share_header, title, en)
-                }
-            )
-            appendLine(appContext.getString(R.string.share_id, typhoon.id))
-            if (typhoon.strong.isNotBlank()) {
-                appendLine(
-                    appContext.getString(
-                        R.string.share_intensity,
-                        localizeIntensityLabel(appContext, typhoon.strong)
-                    )
-                )
-            }
-            if (typhoon.positionDesc.isNotBlank()) {
-                appendLine(appContext.getString(R.string.share_position, typhoon.positionDesc))
-            }
-            typhoon.distanceKmFrom(userLocation.value)?.let { km ->
-                appendLine(appContext.getString(R.string.distance_from_you, km.roundKm()))
-            }
-            if (last != null) {
-                appendLine(
-                    appContext.getString(
-                        R.string.share_wind_pressure,
-                        last.speed,
-                        last.pressure
-                    )
-                )
-                appendLine(
-                    appContext.getString(
-                        R.string.share_move,
-                        "${last.moveDirection} ${last.moveSpeed}".trim()
-                    )
-                )
-                appendLine(appContext.getString(R.string.share_observed_time, last.time))
-            }
-            if (typhoon.forecastText.isNotBlank()) {
-                appendLine(appContext.getString(R.string.share_forecast, typhoon.forecastText))
-            }
-        }.trim()
-    }
+    fun shareSummary(typhoon: Typhoon): String =
+        typhoon.shareText(appContext, userLocation.value)
 
     override fun onCleared() {
         // Keep ongoing Live notification when leaving UI; only cancel via settings.
