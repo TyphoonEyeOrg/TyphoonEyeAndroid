@@ -119,6 +119,76 @@ class StormNamesTest {
         assertEquals("蔷琵", e.zhHans)
         assertEquals("薔琵", e.zhHantTW)
         assertEquals("薔琵", e.zhHK)
+        // Champi-style mis-pair is Chan-hom's Chinese on Champi. They stay distinct.
+        val chanHom = StormNames.find("Chan-hom")!!
+        assertEquals("灿鸿", chanHom.zhHans)
+        assertEquals("昌鴻", chanHom.zhHantTW)
+        assertEquals("燦鴻", chanHom.zhHK)
+        assertFalse(e.retired)
+        assertFalse(chanHom.retired)
+    }
+
+    /**
+     * NMC「2000年以来被除名台风及替换名称表」
+     * (https://www.nmc.cn/publish/typhoon/typhoon-name/index.html), row order.
+     * zhHantTW / zhHK stay null: CWA and HKO do not publish these, and the file
+     * does not transliterate. Callers fall back to the data-source Chinese name.
+     */
+    @Test fun retired_roster_matches_nmc_delisted_table_and_leaves_other_columns_empty() {
+        val retired = StormNames.index.file.entries.filter { it.retired }
+        assertEquals(nmcDelisted.map { it.first }, retired.map { it.en })
+        retired.forEachIndexed { i, e ->
+            assertEquals(e.en, nmcDelisted[i].second, e.zhHans)
+            assertNull(e.en, e.zhHantTW)
+            assertNull(e.en, e.zhHK)
+            assertEquals(e.en, "nmc", e.sources.zhHans)
+            assertNull(e.en, e.sources.zhHantTW)
+            assertNull(e.en, e.sources.zhHK)
+        }
+        val activeZh = StormNames.index.file.entries.filter { !it.retired }.map { it.zhHans }.toSet()
+        nmcDelisted.forEach { (_, zh) -> assertFalse(zh, zh in activeZh) }
+    }
+
+    @Test fun retired_null_columns_fall_back_to_data_source_chinese() {
+        val t = juhe("龙王", "LONGWANG")
+        assertTrue(StormNames.find("Longwang")!!.retired)
+        assertEquals("龙王", t.localizedName(AppLanguage.ZhHans))
+        assertEquals("龙王", t.localizedName(AppLanguage.ZhHant))
+        assertEquals("龙王", t.localizedName(AppLanguage.Yue))
+        assertEquals("Longwang", t.localizedName(AppLanguage.English))
+        // English-only input has no data-source Chinese to fall back to.
+        assertEquals("Longwang", StormNames.localize("Longwang", null, AppLanguage.ZhHant))
+    }
+
+    /**
+     * TC58 (Jeju, 10–13 March 2026) approved retirement of these eight and asked
+     * for replacements. HKO, JMA and NMC lists effective 2026-06-08 still include
+     * them, so they stay in the publicity-checked 140 with full columns.
+     * https://www.typhooncommittee.org/58th/docs/final/TC58_FINAL.pdf (decision r)
+     * https://www.hko.gov.hk/en/informtc/sound/tcname2026e.html
+     * https://www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/tyname.html
+     */
+    @Test fun tc58_pending_replacements_stay_on_the_operational_list() {
+        listOf("Wipha", "Co-may", "Matmo", "Mitag", "Ragasa", "Bualoi", "Kalmaegi", "Fung-wong").forEach { en ->
+            val e = StormNames.find(en)!!
+            assertFalse(en, e.retired)
+            assertFalse(en, e.zhHans.isNullOrBlank())
+            assertFalse(en, e.zhHantTW.isNullOrBlank())
+            assertFalse(en, e.zhHK.isNullOrBlank())
+            assertEquals(en, "cwa", e.sources.zhHantTW)
+            assertEquals(en, "hko", e.sources.zhHK)
+        }
+    }
+
+    /** NMC spelling-correction table. Old forms are not extra rows, retired or otherwise. */
+    @Test fun spelling_corrections_are_not_separate_entries() {
+        listOf("Kularb", "Megkhla", "Ramasoon", "Vipa", "Chebi", "Kaemi", "Koni", "Noguri", "Changmi").forEach {
+            assertNull(it, StormNames.find(it))
+        }
+        assertFalse(StormNames.find("Kulap")!!.retired)
+        assertTrue(StormNames.find("Jebi")!!.retired)
+        assertEquals("飞燕", StormNames.find("Jebi")!!.zhHans)
+        assertEquals("天鹅", StormNames.find("Goni")!!.zhHans)
     }
 
     @Test fun json_parses_on_jvm_with_schema() {
@@ -199,4 +269,85 @@ class StormNamesTest {
         assertEquals(NameColumn.ZhHK, StormNames.columnForLocaleTag("zh-HK"))
         assertEquals("米娜", StormNames.localize("Mitag", "", StormNames.columnForLocaleTag("zh-Hans-HK")))
     }
+
+    /** NMC delisted English / zh-CN pairs, same order as storm_names.json. */
+    private val nmcDelisted = listOf(
+        "Hanuman" to "翰文",
+        "Sarika" to "莎莉嘉",
+        "Kodo" to "库都",
+        "Hato" to "天鸽",
+        "Chataan" to "查特安",
+        "Kai-tak" to "启德",
+        "Imbudo" to "伊布都",
+        "Tembin" to "天秤",
+        "Rusa" to "鹿莎",
+        "Mangkhut" to "山竹",
+        "Vamei" to "画眉",
+        "Rumbia" to "温比亚",
+        "Maemi" to "鸣蝉",
+        "Faxai" to "法茜",
+        "Pongsona" to "凤仙",
+        "Hagibis" to "海贝思",
+        "Rananim" to "云娜",
+        "Kammuri" to "北冕",
+        "Sudal" to "苏特",
+        "Lekima" to "利奇马",
+        "Tingting" to "婷婷",
+        "Phanfone" to "巴蓬",
+        "Yanyan" to "欣欣",
+        "Yutu" to "玉兔",
+        "Longwang" to "龙王",
+        "Goni" to "天鹅",
+        "Matsa" to "麦莎",
+        "Linfa" to "莲花",
+        "Nabi" to "彩蝶",
+        "Molave" to "莫拉菲",
+        "Bilis" to "碧利斯",
+        "Vamco" to "环高",
+        "Chanchu" to "珍珠",
+        "Vongfong" to "黄蜂",
+        "Durian" to "榴莲",
+        "Conson" to "康森",
+        "Saomai" to "桑美",
+        "Hinnamnor" to "轩岚诺",
+        "Xangsane" to "象神",
+        "Kompasu" to "圆规",
+        "Ketsana" to "凯萨娜",
+        "Ma-on" to "马鞍",
+        "Morakot" to "莫拉克",
+        "Malakas" to "马勒卡",
+        "Parma" to "芭玛",
+        "Megi" to "鲇鱼",
+        "Fanapi" to "凡亚比",
+        "Nalgae" to "尼格",
+        "Washi" to "天鹰",
+        "Noru" to "奥鹿",
+        "Bopha" to "宝霞",
+        "Rai" to "雷伊",
+        "Fitow" to "菲特",
+        "Doksuri" to "杜苏芮",
+        "Haiyan" to "海燕",
+        "Haikui" to "海葵",
+        "Sonamu" to "清松",
+        "Saola" to "苏拉",
+        "Utor" to "尤特",
+        "Ewiniar" to "艾云尼",
+        "Vicente" to "韦森特",
+        "Jebi" to "飞燕",
+        "Rammasun" to "威马逊",
+        "Kong-rey" to "康妮",
+        "Koppu" to "巨爵",
+        "Krathon" to "山陀儿",
+        "Melor" to "茉莉",
+        "Man-yi" to "万宜",
+        "Mujigae" to "彩虹",
+        "Toraji" to "桃芝",
+        "Soudelor" to "苏迪罗",
+        "Trami" to "潭美",
+        "Haima" to "海马",
+        "Usagi" to "天兔",
+        "Meranti" to "莫兰蒂",
+        "Yagi" to "摩羯",
+        "Nockten" to "洛坦",
+    )
 }
