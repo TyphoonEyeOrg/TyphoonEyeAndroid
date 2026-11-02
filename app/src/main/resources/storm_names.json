@@ -2,8 +2,8 @@
  "schemaVersion": 1,
  "listVersion": "2026",
  "effectiveDate": "2026-06-08",
- "retrievedDate": "2026-10-20",
- "description": "ESCAP/WMO Typhoon Committee western North Pacific names. Shared by Android and iOS. Strings copied verbatim from the official lists; never transliterate or convert Simplified->Traditional. null = not sourced (unverified).",
+ "retrievedDate": "2026-11-01",
+ "description": "ESCAP/WMO Typhoon Committee western North Pacific names. Shared by Android and iOS. Strings copied verbatim from the official lists; never transliterate or convert Simplified->Traditional. null = not sourced (unverified). retired=true is the NMC delisted table (77 names since 2000, including names withdrawn before use). Those zhHantTW and zhHK values stay null; clients fall back to the data-source Chinese name. The 140 retired=false names are the HKO/JMA/NMC list effective 2026-06-08. TC58 (10-13 March 2026) also approved retirement of Wipha, Co-may, Matmo, Mitag, Ragasa, Bualoi, Kalmaegi and Fung-wong, but those eight stay on that list until replacements are adopted, so they stay retired=false with full columns.",
  "sources": {
   "hko": {
    "name": "Hong Kong Observatory",
