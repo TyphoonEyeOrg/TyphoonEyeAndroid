@@ -1,0 +1,5 @@
+- Emergency and alert copy now says the app is unofficial and points you to your local weather authority
+- Share text shows movement, speed, and observation time in the current language and local time zone
+- Map attribution links to OpenFreeMap, with full copyright text you can open
+- Track and forecast requests are more resilient; one failed storm no longer blanks the whole list
+Unofficial app. In an emergency, follow your local authority's warnings.
