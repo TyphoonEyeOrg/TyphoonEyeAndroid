@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Cyclone
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -119,12 +120,14 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onLoadDemo: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit = {},
     onTyphoonClick: (Typhoon) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pullState = rememberPullToRefreshState()
     val settingsCd = stringResource(R.string.settings)
+    val historyCd = stringResource(R.string.cd_open_history)
     val refreshCd = stringResource(R.string.refresh)
     val totalCount = when (uiState) {
         is TyphoonUiState.Success -> uiState.typhoons.size
@@ -155,6 +158,12 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(
+                        onClick = onOpenHistory,
+                        modifier = Modifier.semantics { contentDescription = historyCd }
+                    ) {
+                        Icon(Icons.Outlined.History, contentDescription = null)
+                    }
                     FilledTonalIconButton(
                         onClick = onOpenSettings,
                         modifier = Modifier.semantics { contentDescription = settingsCd }

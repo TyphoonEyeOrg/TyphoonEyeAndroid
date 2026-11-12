@@ -1,5 +1,8 @@
 package seamain.org.typhoonEye.domain.repository
 
+import seamain.org.typhoonEye.domain.history.HistoricalSourceUnavailableError
+import seamain.org.typhoonEye.domain.history.HistoricalStormFeed
+import seamain.org.typhoonEye.domain.history.HistoricalTrack
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
 
@@ -19,4 +22,17 @@ interface TyphoonRepository {
     suspend fun getCachedFeed(): TyphoonFeed?
 
     suspend fun getTyphoonDetail(id: String): Result<Typhoon>
+
+    /**
+     * QWeather northwest Pacific list for the current or previous UTC+8 year.
+     * Does not replace the active-typhoon cache.
+     */
+    suspend fun getHistoricalStorms(
+        year: Int,
+        forceRefresh: Boolean = false
+    ): Result<HistoricalStormFeed> = Result.failure(HistoricalSourceUnavailableError())
+
+    /** QWeather track only. An empty track is a success with [HistoricalTrack.trackMissing]. */
+    suspend fun getHistoricalTrack(id: String, name: String): Result<HistoricalTrack> =
+        Result.failure(HistoricalSourceUnavailableError())
 }
