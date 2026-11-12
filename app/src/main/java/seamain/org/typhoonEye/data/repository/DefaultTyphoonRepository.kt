@@ -19,15 +19,29 @@ import seamain.org.typhoonEye.data.api.parseRetryAfterUntilMs
 import seamain.org.typhoonEye.data.api.relayLimitKind
 import seamain.org.typhoonEye.data.api.RELAY_STALE_HEADER
 import seamain.org.typhoonEye.data.api.RETRY_AFTER_HEADER
+import seamain.org.typhoonEye.data.local.CachedHistoricalList
+import seamain.org.typhoonEye.data.local.CachedHistoricalTrack
+import seamain.org.typhoonEye.data.local.HistoricalCache
+import seamain.org.typhoonEye.data.local.MemoryHistoricalCache
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
+import seamain.org.typhoonEye.data.model.toHistoricalPoint
+import seamain.org.typhoonEye.data.model.toHistoricalStorm
 import seamain.org.typhoonEye.data.model.QWeatherStormInfo
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
 import seamain.org.typhoonEye.data.sync.FeedSyncStore
+import seamain.org.typhoonEye.domain.history.HistoricalCoverage
+import seamain.org.typhoonEye.domain.history.HistoricalNetworkException
+import seamain.org.typhoonEye.domain.history.HistoricalSourceUnavailableError
+import seamain.org.typhoonEye.domain.history.HistoricalStormFeed
+import seamain.org.typhoonEye.domain.history.HistoricalTrack
+import seamain.org.typhoonEye.domain.history.UnsupportedHistoryYearError
+import seamain.org.typhoonEye.domain.history.historicalYearFromId
 import seamain.org.typhoonEye.domain.model.RelayLimitKind
 import seamain.org.typhoonEye.domain.model.RelayLimitedException
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonFeed
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
@@ -56,7 +70,8 @@ class DefaultTyphoonRepository @Inject constructor(
     private val qWeatherAuth: QWeatherAuthInterceptor,
     private val localDataSource: TyphoonLocalDataSource,
     private val syncStore: FeedSyncStore,
-    private val clock: WallClock
+    private val clock: WallClock,
+    private val historyCache: HistoricalCache = MemoryHistoricalCache()
 ) : TyphoonRepository {
 
     private val qWeatherConfigured: Boolean
@@ -66,6 +81,9 @@ class DefaultTyphoonRepository @Inject constructor(
 
     /** Serialises list loads so UI + background worker never fetch in parallel. */
     private val listMutex = Mutex()
+
+    /** Separate from [listMutex] so a history query does not delay a live refresh. */
+    private val historyMutex = Mutex()
 
     private val relayThrottleLock = Any()
 
@@ -612,6 +630,175 @@ class DefaultTyphoonRepository @Inject constructor(
      * Like [runCatching], but cancellation must keep propagating so a superseded
      * refresh releases [listMutex] instead of being reported as a network error.
      */
+    override suspend fun getHistoricalStorms(
+        year: Int,
+        forceRefresh: Boolean
+    ): Result<HistoricalStormFeed> = historyMutex.withLock {
+        if (!HistoricalCoverage.isSupported(year, clock.nowMs())) {
+            return@withLock Result.failure(UnsupportedHistoryYearError(year))
+        }
+        if (!qWeatherConfigured) {
+            return@withLock Result.failure(HistoricalSourceUnavailableError())
+        }
+        val now = clock.nowMs()
+        val cached = runCatchingCancellable { historyCache.readList(year) }.getOrNull()
+        val age = cached?.let { now - it.fetchedAtEpochMs }
+        val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
+        if (cached != null && age != null && age >= 0 && age < minAge) {
+            return@withLock Result.success(cached.toFeed(fromCache = true, stale = null))
+        }
+        activeRetryUntil(now)?.let { until ->
+            val limited = RelayLimitedException(currentThrottle().kind ?: RelayLimitKind.Busy, until)
+            return@withLock cachedHistoryOrFailure(cached, limited)
+        }
+        try {
+            val response = qWeatherApi.getStormList(basin = HistoricalCoverage.BASIN, year = year.toString())
+            val relay = response.relayHttp()
+            if (relay.limit != null) {
+                rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+                return@withLock cachedHistoryOrFailure(
+                    cached,
+                    RelayLimitedException(relay.limit, relay.retryAfterUntilMs)
+                )
+            }
+            if (!response.isSuccessful || response.body() == null) {
+                return@withLock cachedHistoryOrFailure(
+                    cached,
+                    Exception("QWeather HTTP ${response.code()}")
+                )
+            }
+            val body = response.body()!!
+            if (body.code != "200" && body.code != "204") {
+                val error: Exception = if (body.code == "402" || body.code == "429") {
+                    RelayLimitedException(RelayLimitKind.Busy, null)
+                } else {
+                    Exception("QWeather ${body.code}")
+                }
+                return@withLock cachedHistoryOrFailure(cached, error)
+            }
+            val storms = if (body.code == "204") emptyList() else body.storm.mapNotNull { it.toHistoricalStorm() }
+            runCatchingCancellable { historyCache.writeList(year, storms, now) }
+            Result.success(
+                HistoricalStormFeed(
+                    year = year,
+                    storms = storms,
+                    fromCache = relay.stale,
+                    fetchedAtEpochMs = now
+                )
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            cachedHistoryOrFailure(cached, HistoricalNetworkException(e.message ?: "network"))
+        }
+    }
+
+    override suspend fun getHistoricalTrack(id: String, name: String): Result<HistoricalTrack> =
+        historyMutex.withLock {
+            if (!qWeatherConfigured) {
+                return@withLock Result.failure(HistoricalSourceUnavailableError())
+            }
+            val stormId = id.trim()
+            val year = historicalYearFromId(stormId)
+            if (year == null || !HistoricalCoverage.isSupported(year, clock.nowMs())) {
+                return@withLock Result.failure(UnsupportedHistoryYearError(year ?: -1))
+            }
+            val now = clock.nowMs()
+            val cached = runCatchingCancellable { historyCache.readTrack(stormId) }.getOrNull()
+            val age = cached?.let { now - it.fetchedAtEpochMs }
+            if (cached != null && age != null && age >= 0 && age < DETAIL_TTL_MS) {
+                return@withLock Result.success(cached.toTrack(name, fromCache = true, stale = null))
+            }
+            activeRetryUntil(now)?.let { until ->
+                val limited = RelayLimitedException(currentThrottle().kind ?: RelayLimitKind.Busy, until)
+                return@withLock cachedTrackOrFailure(cached, name, limited)
+            }
+            try {
+                val response = qWeatherApi.getStormTrack(stormId)
+                val relay = response.relayHttp()
+                if (relay.limit != null) {
+                    rememberRelayThrottle(relay.limit, relay.retryAfterUntilMs)
+                    return@withLock cachedTrackOrFailure(
+                        cached,
+                        name,
+                        RelayLimitedException(relay.limit, relay.retryAfterUntilMs)
+                    )
+                }
+                if (!response.isSuccessful || response.body() == null) {
+                    return@withLock cachedTrackOrFailure(
+                        cached,
+                        name,
+                        Exception("QWeather HTTP ${response.code()}")
+                    )
+                }
+                val body = response.body()!!
+                if (body.code != "200" && body.code != "204") {
+                    return@withLock cachedTrackOrFailure(cached, name, Exception("QWeather ${body.code}"))
+                }
+                val points = if (body.code == "204") {
+                    emptyList()
+                } else {
+                    body.track.mapNotNull { it.toHistoricalPoint() }
+                }
+                val trackMissing = points.isEmpty()
+                val windMissing = points.isEmpty() || points.none { it.hasAnyWindRadius() }
+                val strong = points.lastOrNull()?.strong.orEmpty()
+                val active = body.isActive == "1"
+                val displayName = name.trim().ifBlank { cached?.name?.trim().orEmpty() }.ifBlank { stormId }
+                runCatchingCancellable {
+                    historyCache.writeTrack(
+                        CachedHistoricalTrack(
+                            id = stormId,
+                            name = displayName,
+                            active = active,
+                            strong = strong,
+                            points = points,
+                            trackMissing = trackMissing,
+                            windRadiiMissing = windMissing,
+                            fetchedAtEpochMs = now
+                        )
+                    )
+                }
+                Result.success(
+                    HistoricalTrack(
+                        typhoon = Typhoon(
+                            id = stormId,
+                            name = displayName,
+                            englishName = "",
+                            status = if (active) "active" else "dissipated",
+                            strong = strong,
+                            points = points,
+                            forecastPoints = emptyList()
+                        ),
+                        trackMissing = trackMissing,
+                        windRadiiMissing = windMissing,
+                        fromCache = relay.stale
+                    )
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                cachedTrackOrFailure(cached, name, HistoricalNetworkException(e.message ?: "network"))
+            }
+        }
+
+    private fun cachedHistoryOrFailure(
+        cached: CachedHistoricalList?,
+        error: Exception
+    ): Result<HistoricalStormFeed> {
+        if (cached == null) return Result.failure(error)
+        return Result.success(cached.toFeed(fromCache = true, stale = error))
+    }
+
+    private fun cachedTrackOrFailure(
+        cached: CachedHistoricalTrack?,
+        name: String,
+        error: Exception
+    ): Result<HistoricalTrack> {
+        if (cached == null) return Result.failure(error)
+        return Result.success(cached.toTrack(name, fromCache = true, stale = error))
+    }
+
     private inline fun <T> runCatchingCancellable(block: () -> T): Result<T> {
         return try {
             Result.success(block())
@@ -631,3 +818,38 @@ class DefaultTyphoonRepository @Inject constructor(
         const val QWEATHER_MAX_IN_FLIGHT: Int = 3
     }
 }
+
+private fun CachedHistoricalList.toFeed(fromCache: Boolean, stale: Throwable?) =
+    HistoricalStormFeed(
+        year = year,
+        storms = storms,
+        fromCache = fromCache,
+        staleReason = stale,
+        fetchedAtEpochMs = fetchedAtEpochMs
+    )
+
+private fun CachedHistoricalTrack.toTrack(
+    displayName: String,
+    fromCache: Boolean,
+    stale: Throwable?
+): HistoricalTrack {
+    val shown = displayName.trim().ifBlank { name }.ifBlank { id }
+    return HistoricalTrack(
+        typhoon = Typhoon(
+            id = id,
+            name = shown,
+            englishName = "",
+            status = if (active) "active" else "dissipated",
+            strong = strong,
+            points = points,
+            forecastPoints = emptyList()
+        ),
+        trackMissing = trackMissing,
+        windRadiiMissing = windRadiiMissing,
+        fromCache = fromCache,
+        staleReason = stale
+    )
+}
+
+private fun TyphoonPoint.hasAnyWindRadius(): Boolean =
+    radius7.isNotBlank() || radius10.isNotBlank() || radius12.isNotBlank()
