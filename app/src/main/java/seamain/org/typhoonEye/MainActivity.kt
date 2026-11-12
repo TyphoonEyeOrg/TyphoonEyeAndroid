@@ -61,11 +61,15 @@ import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.domain.model.AppUpdateState
 import seamain.org.typhoonEye.ui.DataMode
+import seamain.org.typhoonEye.ui.HistoryViewModel
 import seamain.org.typhoonEye.ui.TyphoonViewModel
 import seamain.org.typhoonEye.ui.components.AppUpdateHost
 import seamain.org.typhoonEye.ui.components.LocationOptInNoticeDialog
 import seamain.org.typhoonEye.ui.navigation.AppDestination
+import seamain.org.typhoonEye.domain.history.TrackPhase
 import seamain.org.typhoonEye.ui.screens.DetailScreen
+import seamain.org.typhoonEye.ui.screens.HistoryDetailStatus
+import seamain.org.typhoonEye.ui.screens.HistoryScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.screens.SettingsScreen
 import seamain.org.typhoonEye.ui.theme.Motion
@@ -94,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             // @AndroidEntryPoint supplies the Hilt ViewModel factory automatically.
             val typhoonVm: TyphoonViewModel = viewModel()
+            val historyVm: HistoryViewModel = viewModel()
             val settings by typhoonVm.settings.collectAsStateWithLifecycle()
             val deepLinkId by pendingTyphoonId.collectAsStateWithLifecycle()
             val loadDemo by pendingLoadDemo.collectAsStateWithLifecycle()
@@ -114,6 +119,7 @@ class MainActivity : AppCompatActivity() {
                 ) {
                     TyphoonApp(
                         viewModel = typhoonVm,
+                        historyViewModel = historyVm,
                         deepLinkTyphoonId = deepLinkId,
                         onDeepLinkConsumed = { pendingTyphoonId.value = null },
                         loadDemoRequested = loadDemo,
@@ -142,6 +148,7 @@ class MainActivity : AppCompatActivity() {
 @Composable
 fun TyphoonApp(
     viewModel: TyphoonViewModel,
+    historyViewModel: HistoryViewModel,
     deepLinkTyphoonId: String? = null,
     onDeepLinkConsumed: () -> Unit = {},
     loadDemoRequested: Boolean = false,
@@ -168,6 +175,8 @@ fun TyphoonApp(
     }
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+    val historyUi by historyViewModel.ui.collectAsStateWithLifecycle()
+    val historyDetail by historyViewModel.detailUi.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val navController = rememberNavController()
     val inAppUpdatesEnabled = remember(context) {
@@ -399,6 +408,11 @@ fun TyphoonApp(
                         launchSingleTop = true
                     }
                 },
+                onOpenHistory = {
+                    navController.navigate(AppDestination.History) {
+                        launchSingleTop = true
+                    }
+                },
                 onTyphoonClick = { typhoon ->
                     viewModel.selectTyphoon(typhoon)
                     navController.navigate(AppDestination.detail(typhoon.id)) {
@@ -445,6 +459,89 @@ fun TyphoonApp(
                 },
                 isCheckingUpdates = appUpdateState is AppUpdateState.Checking
             )
+        }
+
+        composable(AppDestination.History) {
+            BackHandler { navController.popBackStack() }
+            HistoryScreen(
+                state = historyUi,
+                onBack = { navController.popBackStack() },
+                onYearChange = historyViewModel::setYear,
+                onQueryChange = historyViewModel::setQuery,
+                onRefresh = historyViewModel::refresh,
+                onOpenStorm = { storm ->
+                    historyViewModel.loadDetail(storm)
+                    navController.navigate(AppDestination.historyDetail(storm.id)) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenAttribution = { url ->
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = AppDestination.HistoryDetail,
+            arguments = listOf(
+                navArgument(AppDestination.ArgTyphoonId) { type = NavType.StringType }
+            )
+        ) { entry ->
+            val typhoonId = entry.arguments?.getString(AppDestination.ArgTyphoonId).orEmpty()
+            val track = historyDetail.track?.takeIf { typhoonIdsMatch(it.typhoon.id, typhoonId) }
+            val leaveHistoryDetail = {
+                navController.popBackStack()
+                Unit
+            }
+            BackHandler(onBack = leaveHistoryDetail)
+            val statusMessage = when (historyDetail.phase) {
+                TrackPhase.OfflineReady -> stringResource(R.string.history_offline)
+                TrackPhase.RateLimited -> stringResource(R.string.history_rate_limit)
+                TrackPhase.UpstreamError -> stringResource(R.string.history_upstream_error)
+                else -> null
+            }
+            when {
+                track != null -> {
+                    DetailScreen(
+                        typhoon = track.typhoon,
+                        loading = historyDetail.loading,
+                        onBack = leaveHistoryDetail,
+                        shareText = stringResource(R.string.history_detail_banner) +
+                            "\n" + track.typhoon.name + " " + track.typhoon.id,
+                        userLocation = null,
+                        mapBasemap = settings.mapBasemap,
+                        historicalRecord = true,
+                        trackMissing = track.trackMissing,
+                        windRadiiMissing = track.windRadiiMissing,
+                        statusMessage = statusMessage,
+                        onShare = { text ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            runCatching {
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        intent,
+                                        context.getString(R.string.share_chooser_title)
+                                    )
+                                )
+                            }
+                        }
+                    )
+                }
+                historyDetail.loading -> {
+                    DetailLoadingPlaceholder(loading = true, onBack = leaveHistoryDetail)
+                }
+                else -> {
+                    HistoryDetailStatus(
+                        phase = historyDetail.phase,
+                        onBack = leaveHistoryDetail
+                    )
+                }
+            }
         }
 
         composable(AppDestination.Licenses) {
