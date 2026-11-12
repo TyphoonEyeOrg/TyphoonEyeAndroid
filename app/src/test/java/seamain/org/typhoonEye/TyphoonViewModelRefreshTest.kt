@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -39,9 +40,9 @@ import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.TyphoonViewModel
 
 /**
- * Issue #39: pull-to-refresh must always drop [TyphoonViewModel.isRefreshing], including when a
- * newer pull cancels the previous job. The superseded job must not clear the spinner or publish
- * its result after the newer job has taken over.
+ * Pull-to-refresh must show [TyphoonViewModel.isRefreshing] immediately, keep it until the
+ * current fetch ends, and must not restart a user fetch that is already running. A pull that
+ * replaces the automatic load must ignore that load's late result.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -53,8 +54,12 @@ class TyphoonViewModelRefreshTest {
             Result.failure(NoDataSourceConfiguredError())
         }
         var cached: TyphoonFeed? = null
+        val forceRefreshCalls = mutableListOf<Boolean>()
 
-        override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> = behavior()
+        override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> {
+            forceRefreshCalls += forceRefresh
+            return behavior()
+        }
         override suspend fun getCachedFeed(): TyphoonFeed? = cached
         override suspend fun getTyphoonDetail(id: String): Result<Typhoon> =
             Result.failure(NoDataSourceConfiguredError())
@@ -178,23 +183,54 @@ class TyphoonViewModelRefreshTest {
     }
 
     @Test
-    fun secondPull_keepsSpinnerUntilTheNewerLoadFinishes() {
-        val gates = ArrayDeque<CompletableDeferred<Result<TyphoonFeed>>>()
+    fun refresh_setsRefreshingBeforeTheLoadIsDispatched() {
+        val dispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(dispatcher)
         repository.behavior = {
-            val gate = CompletableDeferred<Result<TyphoonFeed>>()
-            gates.addLast(gate)
+            Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 1L))
+        }
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.isRefreshing.value)
+
+        val gate = CompletableDeferred<Result<TyphoonFeed>>()
+        repository.behavior = { gate.await() }
+        vm.refresh()
+
+        assertTrue(vm.isRefreshing.value)
+        dispatcher.scheduler.runCurrent()
+        assertTrue(vm.isRefreshing.value)
+        assertEquals(listOf(false, true), repository.forceRefreshCalls)
+
+        gate.complete(Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 2L)))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.isRefreshing.value)
+        assertEquals(2L, vm.lastUpdatedAtMs.value)
+    }
+
+    @Test
+    fun secondPull_keepsTheInFlightUserFetch() {
+        val gate = CompletableDeferred<Result<TyphoonFeed>>()
+        var calls = 0
+        repository.behavior = {
+            calls++
             gate.await()
         }
         val vm = viewModel()
-        assertEquals(1, gates.size)
+        assertEquals(1, calls)
         assertTrue(vm.isRefreshing.value)
 
         vm.refresh()
-
-        assertEquals(2, gates.size)
+        assertEquals(2, calls)
+        assertEquals(listOf(false, true), repository.forceRefreshCalls)
         assertTrue(vm.isRefreshing.value)
 
-        gates.last().complete(Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 8L)))
+        vm.refresh()
+        assertEquals(2, calls)
+        assertTrue(vm.isRefreshing.value)
+
+        gate.complete(Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 8L)))
 
         assertFalse(vm.isRefreshing.value)
         val state = vm.uiState.value as TyphoonUiState.Success
@@ -203,36 +239,54 @@ class TyphoonViewModelRefreshTest {
     }
 
     @Test
-    fun supersededRefresh_doesNotClearSpinnerOrPublishItsFailure() {
-        val newer = CompletableDeferred<Result<TyphoonFeed>>()
+    fun pullDuringAutomaticLoad_ignoresTheCancelledResult() {
+        val first = CompletableDeferred<Result<TyphoonFeed>>()
+        val second = CompletableDeferred<Result<TyphoonFeed>>()
         var calls = 0
-        lateinit var vm: TyphoonViewModel
         repository.behavior = {
             when (++calls) {
-                1 -> Result.failure(DataSourcesFailedError(emptyList()))
-                2 -> {
-                    // Still inside the first pull when the user pulls again. The first call
-                    // then returns a failure; that stale failure must not win.
-                    vm.refresh()
-                    Result.failure(DataSourcesFailedError(emptyList()))
-                }
-                else -> newer.await()
+                1 -> first.await()
+                else -> second.await()
             }
         }
-        vm = viewModel()
-        assertFalse(vm.isRefreshing.value)
-        assertTrue(vm.uiState.value is TyphoonUiState.Error)
+        val vm = viewModel()
+        assertEquals(listOf(false), repository.forceRefreshCalls)
+        assertTrue(vm.isRefreshing.value)
 
         vm.refresh()
 
-        assertEquals(3, calls)
+        assertEquals(listOf(false, true), repository.forceRefreshCalls)
+        assertTrue(vm.isRefreshing.value)
+        first.complete(Result.failure(DataSourcesFailedError(emptyList())))
         assertTrue(vm.isRefreshing.value)
         assertTrue(vm.uiState.value is TyphoonUiState.Loading)
 
-        newer.complete(Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 11L)))
+        val newer = Typhoon(id = "202610", name = "美莎克", englishName = "MAYSAK", status = "active")
+        second.complete(Result.success(TyphoonFeed(listOf(newer), fetchedAtEpochMs = 11L)))
 
         assertFalse(vm.isRefreshing.value)
         val state = vm.uiState.value as TyphoonUiState.Success
-        assertEquals(listOf(storm), state.typhoons)
+        assertEquals(listOf(newer), state.typhoons)
+        assertEquals(11L, vm.lastUpdatedAtMs.value)
+    }
+
+    @Test
+    fun refreshAfterThePreviousPullFinished_requestsAgain() {
+        repository.behavior = {
+            Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 1L))
+        }
+        val vm = viewModel()
+        assertFalse(vm.isRefreshing.value)
+
+        val gate = CompletableDeferred<Result<TyphoonFeed>>()
+        repository.behavior = { gate.await() }
+        vm.refresh()
+        assertTrue(vm.isRefreshing.value)
+        assertEquals(listOf(false, true), repository.forceRefreshCalls)
+
+        gate.complete(Result.success(TyphoonFeed(listOf(storm), fetchedAtEpochMs = 4L)))
+
+        assertFalse(vm.isRefreshing.value)
+        assertEquals(4L, vm.lastUpdatedAtMs.value)
     }
 }
