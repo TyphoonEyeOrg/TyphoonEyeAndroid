@@ -2,15 +2,21 @@ package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import retrofit2.Response
+import kotlin.coroutines.ContinuationInterceptor
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
@@ -32,13 +38,16 @@ import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.util.TyphoonActivity
 import seamain.org.typhoonEye.domain.util.WallClock
 import java.util.Calendar
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Named
 
 /**
  * Cache-first typhoon repository:
- * 1) Active list is served from Room while younger than [LIST_TTL_MS]; pull-to-refresh may
- *    force a fetch, but no more often than [MIN_FORCE_INTERVAL_MS].
+ * 1) A non-forced active list is served from Room while younger than [LIST_TTL_MS].
+ *    Pull-to-refresh always attempts a fetch. Callers share one in-flight fetch, so a
+ *    second pull or the background worker does not open another request, and a pull
+ *    cannot wait out that fetch only to be handed the cache it just wrote.
  * 2) Remote: prefer Juhe, fallback QWeather. A Juhe detail is only re-fetched when the list's
  *    update time (`endtime`) for that storm changed, so a refresh costs 1 + changed storms.
  * 3) On remote failure → serve Room cache with a stale message.
@@ -64,8 +73,22 @@ class DefaultTyphoonRepository @Inject constructor(
 
     private val tag = "TyphoonRepository"
 
-    /** Serialises list loads so UI + background worker never fetch in parallel. */
+    /** Serialises the body of one list fetch. Joiners wait on [inFlightList], not this lock. */
     private val listMutex = Mutex()
+
+    /**
+     * Owns the shared list fetch. The job is not a child of the caller, so cancelling a pull
+     * (or the automatic load that pull replaces) does not abort a fetch another caller joined.
+     * The dispatcher is the caller's, so a fetch started on the test scheduler stays there.
+     */
+    private val listFetchParent = SupervisorJob()
+    private val listFetchGate = Mutex()
+    private val inFlightList = AtomicReference<Deferred<Result<TyphoonFeed>>?>(null)
+
+    private sealed interface ListLoad {
+        data class Ready(val result: Result<TyphoonFeed>) : ListLoad
+        data class Shared(val deferred: Deferred<Result<TyphoonFeed>>) : ListLoad
+    }
 
     private val relayThrottleLock = Any()
 
@@ -96,78 +119,109 @@ class DefaultTyphoonRepository @Inject constructor(
         )
     }
 
-    override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> =
-        listMutex.withLock {
+    override suspend fun getActiveTyphoons(forceRefresh: Boolean): Result<TyphoonFeed> {
+        // Keep the caller's dispatcher, but do not make the fetch a child of the caller.
+        // Cancelling a pull then leaves a fetch another caller has joined running.
+        val dispatcher = currentCoroutineContext()[ContinuationInterceptor] ?: Dispatchers.IO
+        val load = listFetchGate.withLock {
+            inFlightList.get()?.takeIf { it.isActive }?.let { return@withLock ListLoad.Shared(it) }
             val now = clock.nowMs()
             clearExpiredRelayThrottle(now)
             val blocked = activeRetryUntil(now)
             if (blocked != null) {
                 Log.i(tag, "Relay Retry-After active until $blocked, skipping network")
-                return@withLock throttledFeed(now, blocked)
+                return@withLock ListLoad.Ready(throttledFeed(now, blocked))
             }
-            val lastFetch = syncStore.lastListFetchAtMs
-            val minAge = if (forceRefresh) MIN_FORCE_INTERVAL_MS else LIST_TTL_MS
-            val age = lastFetch?.let { now - it }
-            if (age != null && age >= 0 && age < minAge) {
-                val cached = runCatchingCancellable { localDataSource.getAll() }.getOrNull()
-                if (cached != null) {
-                    Log.d(tag, "List fresh (${age / 1000}s old), serving Room cache")
-                    return@withLock Result.success(
-                        TyphoonFeed(
-                            typhoons = cached.resolved(now),
-                            fromCache = true,
-                            fetchedAtEpochMs = lastFetch
-                        )
-                    )
-                }
+            if (!forceRefresh) {
+                freshListCache(now)?.let { return@withLock ListLoad.Ready(Result.success(it)) }
             }
+            val deferred = CoroutineScope(listFetchParent + dispatcher).async {
+                fetchActiveFromNetwork()
+            }
+            inFlightList.set(deferred)
+            deferred.invokeOnCompletion {
+                inFlightList.compareAndSet(deferred, null)
+            }
+            ListLoad.Shared(deferred)
+        }
+        return when (load) {
+            is ListLoad.Ready -> load.result
+            is ListLoad.Shared -> load.deferred.await()
+        }
+    }
 
-            val cachedList = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
-            val remote = fetchRemoteActive(cachedList.associateBy { it.id })
-            remote.onSuccess { list ->
-                runCatchingCancellable { localDataSource.replaceAll(list.typhoons) }
-                    .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
-                syncStore.lastListFetchAtMs = now
-                if (list.stale) {
-                    Log.i(tag, "Relay marked the list stale; showing the cache chip")
-                } else {
-                    clearRelayThrottle()
-                }
-                val throttle = currentThrottle()
-                return@withLock Result.success(
-                    TyphoonFeed(
-                        typhoons = list.typhoons.resolved(now),
-                        fromCache = list.stale,
-                        fetchedAtEpochMs = now,
-                        relayLimit = if (list.stale) throttle.kind else null,
-                        retryAfterUntilEpochMs = if (list.stale) throttle.untilMs else null
-                    )
-                )
-            }
+    /**
+     * Room list younger than [LIST_TTL_MS]. Null when there is no recorded fetch, the
+     * cache read failed, or the row is old enough that a network attempt is due.
+     * An empty list is a real cached answer (a quiet basin), not a miss.
+     * Cancellation from the cache read propagates; it is not treated as a miss.
+     */
+    private suspend fun freshListCache(now: Long): TyphoonFeed? {
+        val lastFetch = syncStore.lastListFetchAtMs ?: return null
+        val age = now - lastFetch
+        if (age < 0 || age >= LIST_TTL_MS) return null
+        val cached = runCatchingCancellable { localDataSource.getAll() }.getOrNull() ?: return null
+        Log.d(tag, "List fresh (${age / 1000}s old), serving Room cache")
+        return TyphoonFeed(
+            typhoons = cached.resolved(now),
+            fromCache = true,
+            fetchedAtEpochMs = lastFetch
+        )
+    }
 
-            val error = remote.exceptionOrNull()
-            val limited = error as? RelayLimitedException
-            if (cachedList.isNotEmpty()) {
-                Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache")
-                return@withLock Result.success(
-                    TyphoonFeed(
-                        typhoons = cachedList.resolved(now),
-                        fromCache = true,
-                        staleMessage = if (limited == null) {
-                            error?.message ?: "网络请求失败"
-                        } else {
-                            null
-                        },
-                        fetchedAtEpochMs = lastFetch ?: latestCachedAt(),
-                        relayLimit = limited?.kind,
-                        retryAfterUntilEpochMs = limited?.retryAfterUntilEpochMs
-                    )
-                )
+    /**
+     * One network attempt, including pull-to-refresh. [LIST_TTL_MS] is not consulted here.
+     * [activeRetryUntil] still skips the network, including on a manual pull, before this runs.
+     */
+    private suspend fun fetchActiveFromNetwork(): Result<TyphoonFeed> = listMutex.withLock {
+        val now = clock.nowMs()
+        val lastFetch = syncStore.lastListFetchAtMs
+        val cachedList = runCatchingCancellable { localDataSource.getAll() }.getOrNull().orEmpty()
+        val remote = fetchRemoteActive(cachedList.associateBy { it.id })
+        remote.onSuccess { list ->
+            runCatchingCancellable { localDataSource.replaceAll(list.typhoons) }
+                .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
+            syncStore.lastListFetchAtMs = now
+            if (list.stale) {
+                Log.i(tag, "Relay marked the list stale; showing the cache chip")
+            } else {
+                clearRelayThrottle()
             }
-            Result.failure(
-                error ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+            val throttle = currentThrottle()
+            return@withLock Result.success(
+                TyphoonFeed(
+                    typhoons = list.typhoons.resolved(now),
+                    fromCache = list.stale,
+                    fetchedAtEpochMs = now,
+                    relayLimit = if (list.stale) throttle.kind else null,
+                    retryAfterUntilEpochMs = if (list.stale) throttle.untilMs else null
+                )
             )
         }
+
+        val error = remote.exceptionOrNull()
+        val limited = error as? RelayLimitedException
+        if (cachedList.isNotEmpty()) {
+            Log.i(tag, "Serving ${cachedList.size} typhoon(s) from Room cache")
+            return@withLock Result.success(
+                TyphoonFeed(
+                    typhoons = cachedList.resolved(now),
+                    fromCache = true,
+                    staleMessage = if (limited == null) {
+                        error?.message ?: "网络请求失败"
+                    } else {
+                        null
+                    },
+                    fetchedAtEpochMs = lastFetch ?: latestCachedAt(),
+                    relayLimit = limited?.kind,
+                    retryAfterUntilEpochMs = limited?.retryAfterUntilEpochMs
+                )
+            )
+        }
+        Result.failure(
+            error ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+        )
+    }
 
     override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
         val now = clock.nowMs()
@@ -610,7 +664,7 @@ class DefaultTyphoonRepository @Inject constructor(
 
     /**
      * Like [runCatching], but cancellation must keep propagating so a superseded
-     * refresh releases [listMutex] instead of being reported as a network error.
+     * refresh is not reported as a network error or an empty cache.
      */
     private inline fun <T> runCatchingCancellable(block: () -> T): Result<T> {
         return try {
@@ -624,7 +678,6 @@ class DefaultTyphoonRepository @Inject constructor(
 
     companion object {
         const val LIST_TTL_MS: Long = 10L * 60 * 1000
-        const val MIN_FORCE_INTERVAL_MS: Long = 60L * 1000
         const val DETAIL_TTL_MS: Long = 30L * 60 * 1000
 
         /** Track and forecast requests in one QWeather list fetch. */
