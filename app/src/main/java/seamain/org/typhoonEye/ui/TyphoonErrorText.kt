@@ -4,7 +4,9 @@ import android.content.Context
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.DataSource
 import seamain.org.typhoonEye.domain.model.DataSourcesFailedError
+import seamain.org.typhoonEye.domain.model.HistoricalSourceUnavailableError
 import seamain.org.typhoonEye.domain.model.NoDataSourceConfiguredError
+import seamain.org.typhoonEye.domain.model.UnsupportedHistoryYearError
 import seamain.org.typhoonEye.domain.model.SourceFailure
 import seamain.org.typhoonEye.domain.model.SourceFailureKind
 import seamain.org.typhoonEye.domain.model.TyphoonDataError
@@ -48,6 +50,8 @@ fun List<SourceFailure>.localizedDetails(context: Context): String? =
 /** Short localized explanation for a stale-cache banner or error body. */
 fun TyphoonDataError.localizedMessage(context: Context): String = when (this) {
     is NoDataSourceConfiguredError -> context.getString(R.string.no_data_source_title)
+    is HistoricalSourceUnavailableError -> context.getString(R.string.history_no_source)
+    is UnsupportedHistoryYearError -> context.getString(R.string.history_unsupported_year)
     is DataSourcesFailedError -> listOfNotNull(
         context.getString(R.string.error_sources_failed),
         failures.localizedDetails(context)

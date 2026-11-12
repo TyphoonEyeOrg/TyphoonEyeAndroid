@@ -19,6 +19,19 @@ class NoDataSourceConfiguredError : TyphoonDataError(
     "No typhoon data source configured (JUHE_KEY and QWeather credentials are empty)"
 )
 
+/**
+ * Historical lists come from QWeather only. Juhe has no year catalog in this app.
+ * Distinct from [NoDataSourceConfiguredError], which means the build has no live source at all.
+ */
+class HistoricalSourceUnavailableError : TyphoonDataError(
+    "Historical typhoon list requires QWeather, which is not configured"
+)
+
+/** [year] is outside the current and previous UTC+8 year that QWeather and the relay serve. */
+class UnsupportedHistoryYearError(val year: Int) : TyphoonDataError(
+    "Historical typhoon year $year is outside the supported QWeather window"
+)
+
 /** At least one source is configured, but every configured source failed. */
 class DataSourcesFailedError(
     val failures: List<SourceFailure>

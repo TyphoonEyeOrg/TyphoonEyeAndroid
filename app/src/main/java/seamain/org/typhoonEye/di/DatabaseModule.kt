@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
+import seamain.org.typhoonEye.data.local.FileHistoricalCache
+import seamain.org.typhoonEye.data.local.HistoricalCache
 import seamain.org.typhoonEye.data.local.TyphoonDao
 import seamain.org.typhoonEye.data.local.TyphoonDatabase
 import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
@@ -44,4 +46,11 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideWallClock(): WallClock = WallClock.System
+
+    @Provides
+    @Singleton
+    fun provideHistoricalCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): HistoricalCache = FileHistoricalCache(context, json)
 }
