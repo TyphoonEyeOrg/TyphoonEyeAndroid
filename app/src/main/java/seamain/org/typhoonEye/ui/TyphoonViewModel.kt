@@ -472,10 +472,19 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
-    /** Pull-to-refresh / retry: forces a fetch unless the last one was under 60 s ago. */
+    /**
+     * Pull-to-refresh / retry. Shows the indicator immediately and requests fresh data.
+     * A pull that arrives while a user fetch is already running keeps that fetch.
+     */
     fun refresh() {
         loadTyphoons(forceRefresh = true)
     }
+
+    /**
+     * True while [refreshJob] is a user-initiated fetch. Cancelling that job to start
+     * another one would drop a request already on the wire and delay the result.
+     */
+    private var refreshRequestsNetwork = false
 
     /**
      * Cancel the list load without letting it publish a result or drop the spinner
@@ -484,11 +493,20 @@ class TyphoonViewModel @Inject constructor(
     private fun cancelInFlightRefresh() {
         val inFlight = refreshJob
         refreshJob = null
+        refreshRequestsNetwork = false
         inFlight?.cancel()
     }
 
     private fun loadTyphoons(forceRefresh: Boolean) {
+        if (forceRefresh) {
+            // The gesture must see a truthful loading state before this returns. Waiting
+            // for a dispatcher hop or a cache read made the pull look idle.
+            _isRefreshing.value = true
+        }
         val previous = refreshJob
+        if (forceRefresh && refreshRequestsNetwork && previous?.isActive == true) {
+            return
+        }
         // Published before the body runs (LAZY) so a previous attempt cancelled below
         // can see that it no longer owns the spinner.
         var current: Job? = null
@@ -496,7 +514,8 @@ class TyphoonViewModel @Inject constructor(
             fun stillCurrent(): Boolean = refreshJob === current
             try {
                 // Stale-while-revalidate: paint the Room cache first, then let the repository
-                // decide (by TTL) whether a network fetch is needed.
+                // decide (by TTL) whether a network fetch is needed. A user pull still
+                // continues into a fresh request after this paint.
                 if (_uiState.value !is TyphoonUiState.Success) {
                     repository.getCachedFeed()
                         ?.takeIf { it.typhoons.isNotEmpty() }
@@ -528,10 +547,12 @@ class TyphoonViewModel @Inject constructor(
                 // stored in refreshJob may clear it (success, error, timeout, or cancel).
                 if (stillCurrent()) {
                     _isRefreshing.value = false
+                    refreshRequestsNetwork = false
                 }
             }
         }
         current = job
+        refreshRequestsNetwork = forceRefresh
         refreshJob = job
         previous?.cancel()
         job.start()
