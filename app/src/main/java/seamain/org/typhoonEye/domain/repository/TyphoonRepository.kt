@@ -9,9 +9,11 @@ import seamain.org.typhoonEye.domain.model.TyphoonFeed
  */
 interface TyphoonRepository {
     /**
-     * Active list. Served from cache while it is younger than the list TTL (10 min);
-     * [forceRefresh] (pull-to-refresh) shortens that to the minimum force interval (60 s).
-     * A relay `Retry-After` suppresses network calls to that source until it expires,
+     * Active list. A non-forced read is served from cache while it is younger than the
+     * list TTL (10 min). [forceRefresh] (pull-to-refresh) always attempts a network fetch.
+     * An in-flight fetch is shared, so a repeated pull or the background worker does not
+     * start a second one or turn into a cache no-op when the first fetch records its time.
+     * A relay `Retry-After` still suppresses network calls to that source until it expires,
      * including pull-to-refresh.
      */
     suspend fun getActiveTyphoons(forceRefresh: Boolean = false): Result<TyphoonFeed>
