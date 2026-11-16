@@ -1,0 +1,4 @@
+- Fixed the pull-to-refresh delay
+- Added typhoon history query for the current year and the previous year (QWeather data)
+- Settings now has an About page with version, unofficial disclaimer, license, and a link to the Android repo
+Unofficial app. In an emergency, follow your local authority's warnings.
