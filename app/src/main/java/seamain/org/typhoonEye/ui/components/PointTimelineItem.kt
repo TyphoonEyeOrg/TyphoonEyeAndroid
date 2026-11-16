@@ -94,12 +94,20 @@ fun PointTimelineItem(
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = stringResource(R.string.timeline_wind_speed, point.speed),
+                        text = if (point.speedReported) {
+                            stringResource(R.string.timeline_wind_speed, point.speed)
+                        } else {
+                            "—"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = stringResource(R.string.timeline_pressure, point.pressure),
+                        text = if (point.pressureReported) {
+                            stringResource(R.string.timeline_pressure, point.pressure)
+                        } else {
+                            "—"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

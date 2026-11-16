@@ -29,7 +29,11 @@ data class TyphoonPoint(
     val moveSpeed: String = "",
     val radius7: String = "",
     val radius10: String = "",
-    val radius12: String = ""
+    val radius12: String = "",
+    /** False when the source omitted pressure. A zero then is not an observed 0 hPa. */
+    val pressureReported: Boolean = true,
+    /** False when the source omitted wind speed. A zero then is not an observed 0 m/s. */
+    val speedReported: Boolean = true
 )
 
 /**

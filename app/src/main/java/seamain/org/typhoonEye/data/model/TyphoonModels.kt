@@ -2,6 +2,9 @@ package seamain.org.typhoonEye.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import seamain.org.typhoonEye.domain.history.HistoricalStorm
+import seamain.org.typhoonEye.domain.history.historicalNumber
+import seamain.org.typhoonEye.domain.history.historicalYearFromId
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 
@@ -341,6 +344,37 @@ fun QWeatherStormInfo.toDomain(
         strong = strongLabel,
         points = points,
         forecastPoints = forecast.map { it.toDomain() }
+    )
+}
+
+/**
+ * One storm-list row. Drops other basins and rows with no id.
+ * Year comes from the response, or from `NP_YY…` when the year field is blank.
+ */
+fun QWeatherStormInfo.toHistoricalStorm(): HistoricalStorm? {
+    val stormId = id.trim()
+    if (stormId.isEmpty()) return null
+    if (basin.isNotBlank() && !basin.equals("NP", ignoreCase = true)) return null
+    val yearInt = year.toIntOrNull() ?: historicalYearFromId(stormId) ?: return null
+    return HistoricalStorm(
+        id = stormId,
+        name = name.trim(),
+        year = yearInt,
+        basin = "NP",
+        active = isActive == "1",
+        number = historicalNumber(stormId, yearInt)
+    )
+}
+
+/**
+ * Track point for a historical record. A position the source did not send is dropped
+ * instead of being drawn at 0,0. Blank pressure, wind speed, and wind radii stay blank.
+ */
+fun QWeatherTrackPoint.toHistoricalPoint(): TyphoonPoint? {
+    if (lat.toDoubleOrNull() == null || lon.toDoubleOrNull() == null) return null
+    return toDomain().copy(
+        pressureReported = pressure.isNotBlank(),
+        speedReported = windSpeed.isNotBlank()
     )
 }
 
