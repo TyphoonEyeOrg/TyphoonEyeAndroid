@@ -4,10 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
@@ -436,17 +434,141 @@ class TyphoonRepositoryTest {
     }
 
     @Test
-    fun `force refresh within 60 seconds is throttled to cache`() = runTest {
+    fun `force refresh within 60 seconds still requests fresh data`() = runTest {
         syncStore.lastListFetchAtMs = nowMs - 30_000L
-        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
+        ))
 
-        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        val cached = repository.getActiveTyphoons(forceRefresh = false).getOrThrow()
+        val pulled = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
 
-        verify(juheApi, never()).getActiveTyphoons(any())
+        assertTrue(cached.fromCache)
+        assertFalse(pulled.fromCache)
+        assertEquals(nowMs, pulled.fetchedAtEpochMs)
+        assertEquals(nowMs, syncStore.lastListFetchAtMs)
+        verify(juheApi, times(1)).getActiveTyphoons(any())
     }
 
     @Test
-    fun `force refresh after 60 seconds bypasses the 10 minute TTL`() = runTest {
+    fun `force refresh after a completed fetch requests again`() = runTest {
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
+            JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
+        ))
+
+        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        nowMs += 1_000L
+        val again = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+
+        assertFalse(again.fromCache)
+        assertEquals(nowMs, again.fetchedAtEpochMs)
+        verify(juheApi, times(2)).getActiveTyphoons(any())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `second force refresh joins the in-flight fetch`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val juhe = GatedJuhe(entered, release)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        val repo = repositoryWith(juhe)
+
+        val first = async { repo.getActiveTyphoons(forceRefresh = true) }
+        entered.await()
+        val second = async { repo.getActiveTyphoons(forceRefresh = true) }
+        advanceUntilIdle()
+        release.complete(Unit)
+
+        val firstFeed = first.await().getOrThrow()
+        val secondFeed = second.await().getOrThrow()
+        assertFalse(firstFeed.fromCache)
+        assertFalse(secondFeed.fromCache)
+        assertEquals(firstFeed.fetchedAtEpochMs, secondFeed.fetchedAtEpochMs)
+        assertEquals(1, juhe.calls.get())
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `pull during an in-flight automatic load shares that fetch`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val juhe = GatedJuhe(entered, release)
+        whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
+        val repo = repositoryWith(juhe)
+
+        val automatic = async { repo.getActiveTyphoons(forceRefresh = false) }
+        entered.await()
+        val pull = async { repo.getActiveTyphoons(forceRefresh = true) }
+        advanceUntilIdle()
+        release.complete(Unit)
+
+        val automaticFeed = automatic.await().getOrThrow()
+        val pullFeed = pull.await().getOrThrow()
+        assertFalse(automaticFeed.fromCache)
+        assertFalse(pullFeed.fromCache)
+        assertEquals(automaticFeed.fetchedAtEpochMs, pullFeed.fetchedAtEpochMs)
+        assertEquals(1, juhe.calls.get())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `background refresh joins an in-flight pull`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val juhe = GatedJuhe(entered, release)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        val repo = repositoryWith(juhe)
+
+        val pull = async { repo.getActiveTyphoons(forceRefresh = true) }
+        entered.await()
+        val worker = async { repo.getActiveTyphoons(forceRefresh = false) }
+        advanceUntilIdle()
+        release.complete(Unit)
+
+        val pullFeed = pull.await().getOrThrow()
+        val workerFeed = worker.await().getOrThrow()
+        assertFalse(pullFeed.fromCache)
+        assertFalse(workerFeed.fromCache)
+        assertEquals(pullFeed.fetchedAtEpochMs, workerFeed.fetchedAtEpochMs)
+        assertEquals(1, juhe.calls.get())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `cancelling the caller that started a fetch does not abort a joined caller`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val juhe = GatedJuhe(entered, release)
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+        val repo = repositoryWith(juhe)
+
+        val first = async { repo.getActiveTyphoons(forceRefresh = false) }
+        entered.await()
+        val second = async { repo.getActiveTyphoons(forceRefresh = true) }
+        advanceUntilIdle()
+        first.cancel()
+        advanceUntilIdle()
+        assertFalse(second.isCompleted)
+        release.complete(Unit)
+
+        val feed = second.await().getOrThrow()
+        assertFalse(feed.fromCache)
+        assertEquals(nowMs, feed.fetchedAtEpochMs)
+        assertEquals(1, juhe.calls.get())
+        try {
+            first.await()
+            fail("cancelled caller must not receive the shared result")
+        } catch (_: CancellationException) {
+            // The starter is cancelled; the joined fetch keeps running.
+        }
+    }
+
+    @Test
+    fun `force refresh inside the 10 minute TTL still requests fresh data`() = runTest {
         syncStore.lastListFetchAtMs = nowMs - 2 * listMinute
         whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(httpOk(
             JuheActiveListResponse(reason = "success", errorCode = 0, result = JuheActiveListResult(emptyList()))
@@ -616,55 +738,6 @@ class TyphoonRepositoryTest {
     }
 
     @Test
-    fun `cancelled in-flight list fetch releases listMutex and does not fall through`() = runTest {
-        val entered = CompletableDeferred<Unit>()
-        val juhe = object : JuheTyphoonApi {
-            var calls = 0
-            override suspend fun getActiveTyphoons(apiKey: String): Response<JuheActiveListResponse> {
-                calls++
-                if (calls == 1) {
-                    entered.complete(Unit)
-                    awaitCancellation()
-                }
-                return httpOk(JuheActiveListResponse(errorCode = 0, result = JuheActiveListResult()))
-            }
-
-            override suspend fun getTyphoonDetail(
-                apiKey: String,
-                typhoonId: String
-            ): Response<JuheDetailResponse> = error("unused")
-        }
-        whenever(localDataSource.getAll()).thenReturn(emptyList())
-        val repo = DefaultTyphoonRepository(
-            juheApi = juhe,
-            qWeatherApi = qWeatherApi,
-            juheKey = juheKey,
-            qWeatherAuth = auth(configured = true),
-            localDataSource = localDataSource,
-            syncStore = FakeSyncStore(),
-            clock = clock
-        )
-
-        val first = async { repo.getActiveTyphoons() }
-        entered.await()
-        val second = async { repo.getActiveTyphoons() }
-        yield()
-        assertFalse(second.isCompleted)
-
-        first.cancel()
-        val secondResult = second.await()
-
-        assertTrue(secondResult.isSuccess)
-        verify(qWeatherApi, never()).getStormList(any(), any())
-        try {
-            first.await()
-            fail("cancelled list fetch must not come back as a source Result")
-        } catch (_: CancellationException) {
-            // expected: the lock was released by propagating cancellation
-        }
-    }
-
-    @Test
     fun `429 with Retry-After serves cache and blocks a second refresh`() = runTest {
         whenever(localDataSource.getAll()).thenReturn(listOf(fullCached("202609", "2026-07-10 14:00:00")))
         whenever(juheApi.getActiveTyphoons(any())).thenReturn(httpError(429, "120"))
@@ -682,7 +755,12 @@ class TyphoonRepositoryTest {
             summarySourceChips(fromCache = true, dataMode = DataMode.Live)
         )
 
-        repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        // Inside Retry-After, and inside the old 60s floor: still no second socket.
+        nowMs += 1_000L
+        val blocked = repository.getActiveTyphoons(forceRefresh = true).getOrThrow()
+        assertEquals(RelayLimitKind.Busy, blocked.relayLimit)
+        assertTrue(blocked.fromCache)
+        assertEquals(nowMs + 119_000L, blocked.retryAfterUntilEpochMs)
         verify(juheApi, times(1)).getActiveTyphoons(any())
         verify(qWeatherApi, times(1)).getStormList(any(), any())
     }
@@ -945,6 +1023,45 @@ class TyphoonRepositoryTest {
         assertEquals(8, gate.started.get())
         assertTrue(gate.maxInFlight.get() <= 3)
         assertEquals(0, gate.inFlight.get())
+    }
+
+    private fun repositoryWith(juhe: JuheTyphoonApi) = DefaultTyphoonRepository(
+        juheApi = juhe,
+        qWeatherApi = qWeatherApi,
+        juheKey = juheKey,
+        qWeatherAuth = auth(configured = true),
+        localDataSource = localDataSource,
+        syncStore = syncStore,
+        clock = clock
+    )
+
+    /**
+     * Suspends inside the list call so two repository callers can overlap.
+     * [calls] counts sockets, not joiners.
+     */
+    private inner class GatedJuhe(
+        private val entered: CompletableDeferred<Unit>,
+        private val release: CompletableDeferred<Unit>
+    ) : JuheTyphoonApi {
+        val calls = AtomicInteger(0)
+
+        override suspend fun getActiveTyphoons(apiKey: String): Response<JuheActiveListResponse> {
+            calls.incrementAndGet()
+            entered.complete(Unit)
+            release.await()
+            return httpOk(
+                JuheActiveListResponse(
+                    reason = "success",
+                    errorCode = 0,
+                    result = JuheActiveListResult(emptyList())
+                )
+            )
+        }
+
+        override suspend fun getTyphoonDetail(
+            apiKey: String,
+            typhoonId: String
+        ): Response<JuheDetailResponse> = error("unused")
     }
 
     private inner class QWeatherGate : QWeatherTyphoonApi {

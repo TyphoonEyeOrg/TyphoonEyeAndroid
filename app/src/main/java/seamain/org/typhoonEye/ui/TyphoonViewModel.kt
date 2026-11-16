@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -95,10 +96,16 @@ class TyphoonViewModel @Inject constructor(
 
     /**
      * Identity of the latest list load. A finishing [loadTyphoons] job may clear
-     * [isRefreshing] only while it is still current, so cancelling an older pull
-     * (rapid re-pull, demo snapshot) cannot stop a newer spinner or publish stale data.
+     * [isRefreshing] only while it is still current, so a cancelled automatic load
+     * or a demo snapshot cannot stop a newer spinner or publish stale data.
      */
     private var refreshGeneration = 0
+
+    /**
+     * True while [refreshJob] is a user pull. A second pull keeps that job: cancelling
+     * it would drop a request already running and delay the result.
+     */
+    private var userRefreshInFlight = false
 
     private val _dataMode = MutableStateFlow(DataMode.Live)
     val dataMode: StateFlow<DataMode> = _dataMode.asStateFlow()
@@ -339,6 +346,7 @@ class TyphoonViewModel @Inject constructor(
         // Drop any in-flight list load before painting demo data. Bump first so a
         // late completion of the cancelled job cannot clear the spinner or overwrite this snapshot.
         refreshGeneration++
+        userRefreshInFlight = false
         refreshJob?.cancel()
         refreshJob = null
         viewModelScope.launch {
@@ -409,18 +417,31 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
-    /** Pull-to-refresh / retry: forces a fetch unless the last one was under 60 s ago. */
+    /**
+     * Pull-to-refresh / retry. Shows the indicator immediately and requests fresh data.
+     * A pull that arrives while a user fetch is already running keeps that fetch.
+     */
     fun refresh() {
         loadTyphoons(forceRefresh = true)
     }
 
     private fun loadTyphoons(forceRefresh: Boolean) {
+        if (forceRefresh) {
+            // The gesture must see a truthful loading state before this returns. Waiting
+            // for a dispatcher hop or a cache read made the pull look idle.
+            _isRefreshing.value = true
+            if (userRefreshInFlight && refreshJob?.isCompleted == false) return
+        }
         val generation = ++refreshGeneration
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
+        val previous = refreshJob
+        userRefreshInFlight = forceRefresh
+        // Published before the body runs so a previous attempt cancelled below can see
+        // that it no longer owns the spinner.
+        refreshJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
                 // Stale-while-revalidate: paint the Room cache first, then let the repository
-                // decide (by TTL) whether a network fetch is needed.
+                // decide (by TTL) whether a network fetch is needed. A user pull still
+                // continues into a fresh request after this paint.
                 if (_uiState.value !is TyphoonUiState.Success) {
                     val cached = repository.getCachedFeed()
                         ?.takeIf { it.typhoons.isNotEmpty() }
@@ -448,9 +469,12 @@ class TyphoonViewModel @Inject constructor(
                 // but only for this generation: a newer pull may already have set the flag true.
                 if (generation == refreshGeneration) {
                     _isRefreshing.value = false
+                    userRefreshInFlight = false
                 }
             }
         }
+        previous?.cancel()
+        refreshJob?.start()
     }
 
     private fun applyFeed(feed: TyphoonFeed) {

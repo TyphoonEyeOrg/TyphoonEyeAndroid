@@ -9,6 +9,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -38,9 +39,13 @@ import seamain.org.typhoonEye.ui.TyphoonViewModel
 import java.io.IOException
 
 /**
- * Pull-to-refresh must always drop [TyphoonViewModel.isRefreshing] (#39).
+ * Pull-to-refresh must show [TyphoonViewModel.isRefreshing] immediately, keep it until the
+ * current fetch ends, and must not restart a user fetch that is already running. A pull that
+ * replaces the automatic load must ignore that load's late result. Errors, timeouts, and
+ * cancellation still clear the spinner (#39).
+ *
  * Dispatchers.Main is the unconfined test dispatcher so it matches viewModelScope's
- * Main.immediate: a new pull can run its body before the cancelled pull finishes.
+ * Main.immediate, except the test that queues the load to prove the spinner is set first.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TyphoonViewModelRefreshTest {
@@ -115,29 +120,124 @@ class TyphoonViewModelRefreshTest {
     }
 
     @Test
-    fun `rapid re-pull keeps the spinner until the latest request finishes`() {
-        val repository = ControllableTyphoonRepository(holdThroughCancellation = true)
+    fun `refresh shows the spinner before the load is dispatched`() {
+        val dispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(dispatcher)
+        val repository = ControllableTyphoonRepository()
+        val viewModel = viewModel(repository)
+        dispatcher.scheduler.advanceUntilIdle()
+        repository.completeNext(Result.success(feed("202609")))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.isRefreshing.value)
+
+        viewModel.refresh()
+
+        assertTrue(viewModel.isRefreshing.value)
+        assertEquals(listOf(false), repository.forceFlags)
+        dispatcher.scheduler.runCurrent()
+        assertTrue(viewModel.isRefreshing.value)
+        assertEquals(listOf(false, true), repository.forceFlags)
+
+        repository.completeNext(Result.success(feed("202610", fetchedAt = 2L)))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(listOf("202610"), viewModel.successIds())
+        assertEquals(2L, viewModel.lastUpdatedAtMs.value)
+    }
+
+    @Test
+    fun `second pull keeps the in-flight user fetch`() {
+        val repository = ControllableTyphoonRepository()
         val viewModel = viewModel(repository)
         repository.completeNext(Result.success(feed("initial")))
+        assertFalse(viewModel.isRefreshing.value)
 
         viewModel.refresh()
-        val firstPull = repository.active
+        assertEquals(listOf(false, true), repository.forceFlags)
+        assertTrue(viewModel.isRefreshing.value)
+
         viewModel.refresh()
-        val secondPull = repository.active
-
-        assertTrue(firstPull !== secondPull)
+        assertEquals(listOf(false, true), repository.forceFlags)
         assertTrue(viewModel.isRefreshing.value)
 
-        firstPull.complete(Result.success(feed("stale")))
-
-        assertTrue(viewModel.isRefreshing.value)
-        assertEquals(listOf("initial"), viewModel.successIds())
-
-        secondPull.complete(Result.success(feed("fresh")))
+        repository.completeNext(Result.success(feed("fresh", fetchedAt = 8L)))
 
         assertFalse(viewModel.isRefreshing.value)
         assertEquals(listOf("fresh"), viewModel.successIds())
+        assertEquals(8L, viewModel.lastUpdatedAtMs.value)
         assertEquals(DataMode.Live, viewModel.dataMode.value)
+    }
+
+    @Test
+    fun `pull during automatic load ignores that load's late result`() {
+        val repository = ControllableTyphoonRepository(holdThroughCancellation = true)
+        val viewModel = viewModel(repository)
+        val automatic = repository.active
+        assertEquals(listOf(false), repository.forceFlags)
+        assertTrue(viewModel.isRefreshing.value)
+
+        viewModel.refresh()
+
+        assertEquals(listOf(false, true), repository.forceFlags)
+        assertTrue(viewModel.isRefreshing.value)
+        assertTrue(viewModel.uiState.value is TyphoonUiState.Loading)
+
+        automatic.complete(Result.success(feed("stale")))
+
+        assertTrue(viewModel.isRefreshing.value)
+        assertTrue(viewModel.uiState.value is TyphoonUiState.Loading)
+
+        repository.completeNext(Result.success(feed("fresh", fetchedAt = 11L)))
+
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(listOf("fresh"), viewModel.successIds())
+        assertEquals(11L, viewModel.lastUpdatedAtMs.value)
+        assertEquals(DataMode.Live, viewModel.dataMode.value)
+    }
+
+    @Test
+    fun `refresh after the previous pull finished requests again`() {
+        val repository = ControllableTyphoonRepository()
+        val viewModel = viewModel(repository)
+        repository.completeNext(Result.success(feed("initial", fetchedAt = 1L)))
+        assertFalse(viewModel.isRefreshing.value)
+
+        viewModel.refresh()
+        assertTrue(viewModel.isRefreshing.value)
+        repository.completeNext(Result.success(feed("first", fetchedAt = 4L)))
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(4L, viewModel.lastUpdatedAtMs.value)
+
+        viewModel.refresh()
+        assertTrue(viewModel.isRefreshing.value)
+        assertEquals(listOf(false, true, true), repository.forceFlags)
+        repository.completeNext(Result.success(feed("second", fetchedAt = 5L)))
+
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(listOf("second"), viewModel.successIds())
+        assertEquals(5L, viewModel.lastUpdatedAtMs.value)
+    }
+
+    @Test
+    fun `thrown refresh failure clears the spinner and allows another pull`() {
+        val repository = ControllableTyphoonRepository()
+        val viewModel = viewModel(repository)
+        repository.completeNext(Result.success(feed("202609")))
+
+        viewModel.refresh()
+        assertTrue(viewModel.isRefreshing.value)
+        repository.failLatest(IOException("timeout"))
+
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(listOf("202609"), viewModel.successIds())
+
+        viewModel.refresh()
+        assertTrue(viewModel.isRefreshing.value)
+        assertEquals(listOf(false, true, true), repository.forceFlags)
+        repository.completeNext(Result.success(feed("202610")))
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(listOf("202610"), viewModel.successIds())
     }
 
     @Test
@@ -188,7 +288,7 @@ class TyphoonViewModelRefreshTest {
         return viewModel
     }
 
-    private fun feed(id: String) = TyphoonFeed(
+    private fun feed(id: String, fetchedAt: Long = 1_700_000_000_000L) = TyphoonFeed(
         typhoons = listOf(
             Typhoon(
                 id = id,
@@ -197,7 +297,7 @@ class TyphoonViewModelRefreshTest {
                 status = "active"
             )
         ),
-        fetchedAtEpochMs = 1_700_000_000_000L
+        fetchedAtEpochMs = fetchedAt
     )
 
     private fun TyphoonViewModel.successIds(): List<String> {
@@ -225,6 +325,10 @@ class TyphoonViewModelRefreshTest {
 
         fun cancelLatest() {
             requests.last().cancel()
+        }
+
+        fun failLatest(error: Throwable) {
+            requests.last { !it.isCompleted }.completeExceptionally(error)
         }
 
         override suspend fun getCachedFeed(): TyphoonFeed? = null
