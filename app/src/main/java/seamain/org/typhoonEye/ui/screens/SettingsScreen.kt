@@ -1,5 +1,7 @@
 package seamain.org.typhoonEye.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
@@ -62,7 +65,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.ui.about.AboutLinks
 import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.data.preferences.UserSettings
@@ -90,11 +95,18 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val versionLabel = remember(settings.appLanguage) {
+    val packageVersion = remember(settings.appLanguage) {
         runCatching {
-            val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            context.getString(R.string.version_label, info.versionName.orEmpty())
-        }.getOrDefault(context.getString(R.string.app_name))
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull()
+    }
+    val versionName = AboutLinks.displayedVersion(BuildConfig.VERSION_NAME, packageVersion)
+    val versionLabel = stringResource(R.string.version_label, versionName)
+    val openExternal = { url: String ->
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+        Unit
     }
     val needsNotificationPermission =
         (settings.liveActivityEnabled || settings.emergencyAlertsEnabled) && !notificationsGranted
@@ -429,12 +441,10 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = {
-                        Text(
-                            stringResource(
-                                R.string.about_tagline,
-                                versionLabel
-                            )
-                        )
+                        Column {
+                            Text(versionLabel)
+                            Text(stringResource(R.string.about_summary))
+                        }
                     },
                     leadingContent = {
                         Icon(
@@ -444,6 +454,25 @@ fun SettingsScreen(
                         )
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.about_safety)) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+                SettingsDivider()
+                ExternalLinkRow(
+                    title = stringResource(R.string.about_repo),
+                    subtitle = AboutLinks.REPOSITORY_URL,
+                    contentDescription = stringResource(R.string.cd_about_repo),
+                    onClick = { openExternal(AboutLinks.REPOSITORY_URL) }
+                )
+                SettingsDivider()
+                ExternalLinkRow(
+                    title = AboutLinks.LICENSE_NAME,
+                    subtitle = stringResource(R.string.about_license_subtitle),
+                    contentDescription = stringResource(R.string.cd_about_license),
+                    onClick = { openExternal(AboutLinks.LICENSE_URL) }
                 )
                 SettingsDivider()
                 ListItem(
@@ -513,6 +542,37 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ExternalLinkRow(
+    title: String,
+    subtitle: String,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        leadingContent = {
+            Icon(
+                Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingContent = {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .clickable(onClick = onClick, role = Role.Button)
+            .semantics { this.contentDescription = contentDescription }
+    )
 }
 
 @Composable

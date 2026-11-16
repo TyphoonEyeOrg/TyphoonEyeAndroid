@@ -95,7 +95,15 @@ fun DetailScreen(
     shareText: String,
     modifier: Modifier = Modifier,
     userLocation: UserLocation? = null,
-    mapBasemap: MapBasemap = MapBasemap.Auto
+    mapBasemap: MapBasemap = MapBasemap.Auto,
+    /** Opened from historical search. Not a current warning. */
+    historicalRecord: Boolean = false,
+    /** The source returned no track points. Nothing is drawn in their place. */
+    trackMissing: Boolean = false,
+    /** A track exists, but every point omitted wind-circle radii. */
+    windRadiiMissing: Boolean = false,
+    /** Offline or rate-limit note. Null when this record is a fresh response. */
+    statusMessage: String? = null
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -158,6 +166,44 @@ fun DetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (historicalRecord) {
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = stringResource(R.string.history_detail_banner),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        if (!statusMessage.isNullOrBlank()) {
+                            Text(
+                                text = statusMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        if (trackMissing) {
+                            Text(
+                                text = stringResource(R.string.history_track_missing),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        } else if (windRadiiMissing) {
+                            Text(
+                                text = stringResource(R.string.history_wind_missing),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
             DetailHero(typhoon = typhoon)
 
             if (loading) {
@@ -219,7 +265,11 @@ fun DetailScreen(
                         subtitle = stringResource(R.string.history_points_subtitle, typhoon.points.size),
                         points = typhoon.points.asReversed(),
                         isForecast = false,
-                        emptyText = stringResource(R.string.history_empty),
+                        emptyText = if (trackMissing) {
+                            stringResource(R.string.history_track_missing)
+                        } else {
+                            stringResource(R.string.history_empty)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                     else -> TimelineTab(
@@ -227,7 +277,11 @@ fun DetailScreen(
                         subtitle = stringResource(R.string.forecast_points_subtitle, typhoon.forecastPoints.size),
                         points = typhoon.forecastPoints,
                         isForecast = true,
-                        emptyText = stringResource(R.string.forecast_empty),
+                        emptyText = if (historicalRecord) {
+                            stringResource(R.string.history_forecast_absent)
+                        } else {
+                            stringResource(R.string.forecast_empty)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -271,14 +325,18 @@ private fun OverviewTab(
                 add(
                     MetricItem(
                         label = stringResource(R.string.wind_speed),
-                        value = last?.let { "${it.speed} m/s" } ?: "—",
+                        value = last?.let { point ->
+                            if (point.speedReported) "${point.speed} m/s" else "—"
+                        } ?: "—",
                         icon = Icons.Filled.Air
                     )
                 )
                 add(
                     MetricItem(
                         label = stringResource(R.string.pressure),
-                        value = last?.let { "${it.pressure} hPa" } ?: "—",
+                        value = last?.let { point ->
+                            if (point.pressureReported) "${point.pressure} hPa" else "—"
+                        } ?: "—",
                         icon = Icons.Filled.Speed
                     )
                 )
