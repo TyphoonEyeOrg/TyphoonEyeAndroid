@@ -299,4 +299,17 @@
     <string name="history_forecast_absent">历史记录不显示预报，也不会在本地编造预报。</string>
     <string name="history_detail_banner">来自和风天气的历史记录，不是当前预警。预警和防灾行动请以当地权威机构发布为准。</string>
     <string name="history_reload">重新加载</string>
+    <!-- TYP-68: favorites stay on this device; remote history is only the current and previous UTC+8 year -->
+    <string name="cd_open_favorites">收藏的台风</string>
+    <string name="favorites_title">收藏</string>
+    <string name="favorites_empty">还没有收藏的台风</string>
+    <string name="favorites_empty_hint">在正在活跃的台风，或历史查询里的台风上点星标。收藏只保存在这台设备上。</string>
+    <string name="favorites_banner">收藏保存在本机，台风停编后也不会消失。收藏不等于远端记录一直打得开：和风天气只提供今年和上一年（UTC+8）。超出范围时会明确说明，收藏仍留在这里。</string>
+    <string name="favorites_year">%1$d 年</string>
+    <string name="favorites_row_saved">本机收藏</string>
+    <string name="cd_favorite_add">收藏 %1$s</string>
+    <string name="cd_favorite_remove">取消收藏 %1$s</string>
+    <string name="cd_favorites_open">打开收藏的 %1$s</string>
+    <string name="favorites_out_of_range_title">远端记录超出可查范围</string>
+    <string name="favorites_out_of_range_body">%1$s（%2$s）仍在收藏里。这一年超出和风天气提供的范围，历史只覆盖今年和上一年（UTC+8）。收藏不会因此删除，也不保证以后还能取到远端路径。</string>
 </resources>

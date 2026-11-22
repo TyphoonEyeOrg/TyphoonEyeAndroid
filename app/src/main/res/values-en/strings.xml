@@ -298,4 +298,17 @@
     <string name="history_forecast_absent">No forecast is shown for a historical record.</string>
     <string name="history_detail_banner">Historical record from QWeather. Not a current warning. Follow local authorities for warnings and disaster prevention.</string>
     <string name="history_reload">Reload</string>
+    <!-- TYP-68: favorites stay on this device; remote history is only the current and previous UTC+8 year -->
+    <string name="cd_open_favorites">Favorite typhoons</string>
+    <string name="favorites_title">Favorites</string>
+    <string name="favorites_empty">No favorite typhoons yet</string>
+    <string name="favorites_empty_hint">Star an active typhoon, or one from historical search. Favorites stay on this device.</string>
+    <string name="favorites_banner">Favorites are stored on this device and remain after a storm ends. A favorite does not keep the remote record available. QWeather only covers this year and the previous year (UTC+8). Older years show a clear message, and the favorite stays in this list.</string>
+    <string name="favorites_year">%1$d</string>
+    <string name="favorites_row_saved">Saved on this device</string>
+    <string name="cd_favorite_add">Favorite %1$s</string>
+    <string name="cd_favorite_remove">Remove %1$s from favorites</string>
+    <string name="cd_favorites_open">Open favorite %1$s</string>
+    <string name="favorites_out_of_range_title">Remote record is outside the available range</string>
+    <string name="favorites_out_of_range_body">%1$s (%2$s) stays in your favorites. That year is outside the years QWeather provides. History covers only the current and previous UTC+8 year. The favorite is not removed, and it does not guarantee the remote track can be loaded later.</string>
 </resources>

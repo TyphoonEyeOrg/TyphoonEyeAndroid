@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Cyclone
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -121,6 +124,9 @@ fun HomeScreen(
     onLoadDemo: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit = {},
+    onOpenFavorites: () -> Unit = {},
+    isFavorite: (String) -> Boolean = { false },
+    onToggleFavorite: (Typhoon) -> Unit = {},
     onTyphoonClick: (Typhoon) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -128,6 +134,7 @@ fun HomeScreen(
     val pullState = rememberPullToRefreshState()
     val settingsCd = stringResource(R.string.settings)
     val historyCd = stringResource(R.string.cd_open_history)
+    val favoritesCd = stringResource(R.string.cd_open_favorites)
     val refreshCd = stringResource(R.string.refresh)
     val totalCount = when (uiState) {
         is TyphoonUiState.Success -> uiState.typhoons.size
@@ -158,6 +165,12 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(
+                        onClick = onOpenFavorites,
+                        modifier = Modifier.semantics { contentDescription = favoritesCd }
+                    ) {
+                        Icon(Icons.Outlined.Star, contentDescription = null)
+                    }
                     FilledTonalIconButton(
                         onClick = onOpenHistory,
                         modifier = Modifier.semantics { contentDescription = historyCd }
@@ -262,6 +275,8 @@ fun HomeScreen(
                                     TyphoonListCard(
                                         typhoon = typhoon,
                                         userLocation = userLocation,
+                                        isFavorite = isFavorite(typhoon.id),
+                                        onToggleFavorite = { onToggleFavorite(typhoon) },
                                         onClick = { onTyphoonClick(typhoon) },
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
                                     )
@@ -483,7 +498,9 @@ fun TyphoonListCard(
     typhoon: Typhoon,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null
 ) {
     val intensity = typhoon.currentIntensity()
     val last = typhoon.latestPoint()
@@ -546,6 +563,26 @@ fun TyphoonListCard(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        if (onToggleFavorite != null) {
+                            val favoriteCd = stringResource(
+                                if (isFavorite) R.string.cd_favorite_remove else R.string.cd_favorite_add,
+                                title
+                            )
+                            IconButton(
+                                onClick = onToggleFavorite,
+                                modifier = Modifier.semantics { contentDescription = favoriteCd }
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = null,
+                                    tint = if (isFavorite) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
                         IntensityBadge(level = intensity, compact = true)
                         StatusChip(active = typhoon.status == "active")
                     }

@@ -17,8 +17,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -65,7 +67,9 @@ fun HistoryScreen(
     onRefresh: () -> Unit,
     onOpenStorm: (HistoricalStorm) -> Unit,
     onOpenAttribution: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFavorite: (String) -> Boolean = { false },
+    onToggleFavorite: (HistoricalStorm) -> Unit = {}
 ) {
     val context = LocalContext.current
     val presentation = state.presentation
@@ -202,6 +206,11 @@ fun HistoryScreen(
                 val title = storm.name.ifBlank { storm.id }
                 val number = storm.number ?: storm.id
                 val openCd = stringResource(R.string.cd_history_open, title)
+                val saved = isFavorite(storm.id)
+                val favoriteCd = stringResource(
+                    if (saved) R.string.cd_favorite_remove else R.string.cd_favorite_add,
+                    title
+                )
                 ListItem(
                     headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
@@ -218,6 +227,22 @@ fun HistoryScreen(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    },
+                    trailingContent = {
+                        IconButton(
+                            onClick = { onToggleFavorite(storm) },
+                            modifier = Modifier.semantics { contentDescription = favoriteCd }
+                        ) {
+                            Icon(
+                                imageVector = if (saved) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                contentDescription = null,
+                                tint = if (saved) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier
