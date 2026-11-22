@@ -69,7 +69,7 @@ fun HistoryScreen(
     onOpenAttribution: (String) -> Unit,
     modifier: Modifier = Modifier,
     isFavorite: (String) -> Boolean = { false },
-    onToggleFavorite: (HistoricalStorm) -> Unit = {}
+    onToggleFavorite: ((HistoricalStorm) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val presentation = state.presentation
@@ -228,20 +228,24 @@ fun HistoryScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     },
-                    trailingContent = {
-                        IconButton(
-                            onClick = { onToggleFavorite(storm) },
-                            modifier = Modifier.semantics { contentDescription = favoriteCd }
-                        ) {
-                            Icon(
-                                imageVector = if (saved) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                contentDescription = null,
-                                tint = if (saved) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
+                    trailingContent = if (onToggleFavorite == null) {
+                        null
+                    } else {
+                        {
+                            IconButton(
+                                onClick = { onToggleFavorite(storm) },
+                                modifier = Modifier.semantics { contentDescription = favoriteCd }
+                            ) {
+                                Icon(
+                                    imageVector = if (saved) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = null,
+                                    tint = if (saved) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
@@ -263,7 +267,9 @@ fun HistoryScreen(
 fun HistoryDetailStatus(
     phase: TrackPhase,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Shown when a saved favorite could not load its remote record. */
+    footnote: String? = null
 ) {
     val message = when (phase) {
         TrackPhase.Loading -> stringResource(R.string.history_loading)
@@ -292,11 +298,22 @@ fun HistoryDetailStatus(
             )
         }
     ) { padding ->
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(padding).padding(16.dp)
-        )
+        Column(
+            modifier = Modifier.padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (!footnote.isNullOrBlank()) {
+                Text(
+                    text = footnote,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

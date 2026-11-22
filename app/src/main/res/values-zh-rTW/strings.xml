@@ -299,16 +299,23 @@
     <string name="history_detail_banner">來自和風天氣的歷史紀錄，不是目前預警。預警和防災行動請以當地權威機構發布為準。</string>
     <string name="history_reload">重新載入</string>
     <!-- TYP-68 -->
-    <string name="cd_open_favorites">收藏的颱風</string>
-    <string name="favorites_title">收藏</string>
-    <string name="favorites_empty">還沒有收藏的颱風</string>
-    <string name="favorites_empty_hint">在正在活躍的颱風，或歷史查詢裡的颱風上點星標。收藏只保存在這台裝置上。</string>
-    <string name="favorites_banner">收藏保存在本機，颱風停編後也不會消失。收藏不等於遠端紀錄一直打得開：和風天氣只提供今年和上一年（UTC+8）。超出範圍時會明確說明，收藏仍留在這裡。</string>
-    <string name="favorites_year">%1$d 年</string>
-    <string name="favorites_row_saved">本機收藏</string>
-    <string name="cd_favorite_add">收藏 %1$s</string>
-    <string name="cd_favorite_remove">取消收藏 %1$s</string>
-    <string name="cd_favorites_open">開啟收藏的 %1$s</string>
-    <string name="favorites_out_of_range_title">遠端紀錄超出可查範圍</string>
-    <string name="favorites_out_of_range_body">%1$s（%2$s）仍在收藏裡。這一年超出和風天氣提供的範圍，歷史只涵蓋今年和上一年（UTC+8）。收藏不會因此刪除，也不保證以後還能取得遠端路徑。</string>
+    <string name="cd_open_favorites">收藏</string>
+    <string name="favorites_title">收藏的颱風</string>
+    <string name="favorites_empty_title">還沒有收藏</string>
+    <string name="favorites_empty_body">打開目前或歷史颱風後即可收藏。收藏只保存在這台裝置上。</string>
+    <string name="favorites_disclaimer">颱風停編後，收藏仍會留在這份列表裡。收藏不能讓遠端紀錄一直可取。歷史資料只涵蓋今年和上一年（UTC+8），更早的年份會被拒絕。</string>
+    <string name="favorites_action_add">收藏</string>
+    <string name="favorites_action_remove">取消收藏</string>
+    <string name="cd_favorite_add">收藏%1$s</string>
+    <string name="cd_favorite_remove">取消收藏%1$s</string>
+    <string name="favorites_row_year">%1$d年</string>
+    <string name="favorites_row_year_unknown">年份未知</string>
+    <string name="favorites_row_meta">%1$s · %2$s</string>
+    <string name="favorites_last_status">收藏時的狀態：%1$s</string>
+    <string name="cd_favorites_open">開啟%1$s</string>
+    <string name="favorites_unnamed">未命名颱風</string>
+    <string name="favorites_out_of_range_title">遠端紀錄無法取得</string>
+    <string name="favorites_out_of_range_body">%1$s 仍保存在這台裝置上，但它的年份超出本應用可請求的歷史範圍（今年與上一年，UTC+8）。更早的年份會被拒絕。收藏不等於遠端資料一直可取。</string>
+    <string name="favorites_remote_unavailable_body">%1$s 仍保存在這台裝置上。遠端紀錄無法載入。收藏不能保證遠端資料一直可取。</string>
+    <string name="favorites_remove">移除</string>
 </resources>

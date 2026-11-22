@@ -7,7 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
-import seamain.org.typhoonEye.data.local.FavoriteTyphoonDao
+import seamain.org.typhoonEye.data.local.FavoriteDao
 import seamain.org.typhoonEye.data.local.FileHistoricalCache
 import seamain.org.typhoonEye.data.local.HistoricalCache
 import seamain.org.typhoonEye.data.local.TyphoonDao
@@ -34,8 +34,8 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideFavoriteTyphoonDao(database: TyphoonDatabase): FavoriteTyphoonDao =
-        database.favoriteTyphoonDao()
+    fun provideFavoriteDao(database: TyphoonDatabase): FavoriteDao =
+        database.favoriteDao()
 
     @Provides
     @Singleton

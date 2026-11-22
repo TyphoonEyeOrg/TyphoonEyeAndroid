@@ -13,15 +13,15 @@ object AppDestination {
     const val HistoryDetail = "history/{typhoonId}"
     const val Detail = "detail/{typhoonId}"
     const val Favorites = "favorites"
-    const val FavoriteUnavailable = "favorites/unavailable/{favoriteId}"
+    const val FavoriteUnavailable = "favorites/unavailable/{stableId}"
 
     fun detail(typhoonId: String): String = "detail/$typhoonId"
 
     fun historyDetail(typhoonId: String): String = "history/$typhoonId"
 
-    fun favoriteUnavailable(favoriteId: String): String =
-        "favorites/unavailable/${Uri.encode(favoriteId)}"
+    fun favoriteUnavailable(stableId: String): String =
+        "favorites/unavailable/${Uri.encode(stableId)}"
 
     const val ArgTyphoonId = "typhoonId"
-    const val ArgFavoriteId = "favoriteId"
+    const val ArgStableId = "stableId"
 }

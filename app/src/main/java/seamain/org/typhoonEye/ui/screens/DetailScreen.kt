@@ -106,8 +106,9 @@ fun DetailScreen(
     windRadiiMissing: Boolean = false,
     /** Offline or rate-limit note. Null when this record is a fresh response. */
     statusMessage: String? = null,
+    /** Null hides the control (previews and callers that cannot persist a favorite). */
     isFavorite: Boolean = false,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: (() -> Unit)? = null
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -155,14 +156,16 @@ fun DetailScreen(
                     }
                 },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.semantics { contentDescription = favoriteCd }
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                            contentDescription = null
-                        )
+                    if (onToggleFavorite != null) {
+                        FilledTonalIconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.semantics { contentDescription = favoriteCd }
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                contentDescription = null
+                            )
+                        }
                     }
                     FilledTonalIconButton(
                         onClick = { onShare(shareText) },

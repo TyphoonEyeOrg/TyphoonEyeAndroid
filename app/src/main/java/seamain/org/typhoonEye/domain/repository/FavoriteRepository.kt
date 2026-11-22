@@ -1,28 +1,17 @@
 package seamain.org.typhoonEye.domain.repository
 
 import kotlinx.coroutines.flow.Flow
-import seamain.org.typhoonEye.domain.model.FavoriteTyphoon
+import seamain.org.typhoonEye.domain.favorites.FavoriteDraft
+import seamain.org.typhoonEye.domain.favorites.FavoriteTyphoon
 
 /**
- * On-device favorites. Independent of the active-typhoon cache: clearing or
- * replacing that cache must not remove a favorite.
+ * On-device favorites. No account, no upload. A second add of the same stable
+ * storm id is a no-op so the list never contains duplicates.
  */
 interface FavoriteRepository {
-    fun observe(): Flow<List<FavoriteTyphoon>>
+    fun observeFavorites(): Flow<List<FavoriteTyphoon>>
 
-    suspend fun getAll(): List<FavoriteTyphoon>
+    suspend fun add(draft: FavoriteDraft)
 
-    suspend fun isFavorite(rawId: String): Boolean
-
-    /**
-     * Inserts when this stable id is absent. A second save of the same storm
-     * (including Juhe vs QWeather ids) does not create another row or refresh
-     * the original timestamp.
-     */
-    suspend fun add(favorite: FavoriteTyphoon): FavoriteTyphoon
-
-    suspend fun remove(rawId: String)
-
-    /** @return true when the storm is favorited after the call. */
-    suspend fun toggle(favorite: FavoriteTyphoon): Boolean
+    suspend fun remove(sourceId: String)
 }

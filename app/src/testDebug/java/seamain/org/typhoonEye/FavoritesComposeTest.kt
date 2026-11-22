@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -22,8 +21,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import seamain.org.typhoonEye.domain.model.FavoriteTyphoon
+import seamain.org.typhoonEye.domain.favorites.FavoriteTyphoon
 import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.screens.DetailScreen
@@ -32,34 +32,21 @@ import seamain.org.typhoonEye.ui.screens.FavoritesScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
-/**
- * Favorites UI on JVM via Robolectric. src/testDebug so the Compose test
- * activity stays out of the release APK (#38).
- */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zh-rCN")
+@Config(sdk = [34], qualifiers = "en-w1080dp-h2400dp")
 class FavoritesComposeTest {
 
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val mangkhut = FavoriteTyphoon(
-        id = "NP_1822",
-        name = "山竹",
-        englishName = "MANGKHUT",
-        year = 2018,
-        basin = "NP",
-        favoritedAtEpochMs = 1L
-    )
-
     @Test
-    fun home_favoritesEntry_isAlwaysAvailable() {
-        var opened = false
+    fun home_hasFavoritesEntry() {
+        var opened = 0
         composeRule.setContent {
-            Box(modifier = Modifier.size(412.dp, 915.dp)) {
+            Box(modifier = Modifier.size(412.dp, 900.dp)) {
                 TyphoonEyeTheme {
                     HomeScreen(
-                        uiState = TyphoonUiState.Error("网络不可用"),
+                        uiState = TyphoonUiState.Success(emptyList()),
                         filteredTyphoons = emptyList(),
                         isRefreshing = false,
                         query = "",
@@ -71,94 +58,106 @@ class FavoritesComposeTest {
                         onRefresh = {},
                         onLoadDemo = {},
                         onOpenSettings = {},
-                        onOpenFavorites = { opened = true },
+                        onOpenFavorites = { opened += 1 },
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
         }
-        composeRule.onNodeWithContentDescription("收藏的台风").performClick()
-        assertTrue(opened)
+        composeRule.onNodeWithContentDescription("Favorites").performClick()
+        assertEquals(1, opened)
     }
 
     @Test
-    fun favoritesList_rendersStoredMetadata_withoutRemoteData() {
+    fun favoritesList_rendersStoredMetadataWhenRemoteDataIsUnavailable() {
         var opened: String? = null
         composeRule.setContent {
-            Box(modifier = Modifier.size(412.dp, 915.dp)) {
-                TyphoonEyeTheme {
-                    FavoritesScreen(
-                        favorites = listOf(mangkhut),
-                        onBack = {},
-                        onOpen = { opened = it.id },
-                        onRemove = {},
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+            TyphoonEyeTheme {
+                FavoritesScreen(
+                    favorites = listOf(storedOldStorm),
+                    onBack = {},
+                    onOpen = { opened = it.stableId },
+                    onUnfavorite = {}
+                )
             }
         }
-        composeRule.onNodeWithText("山竹").assertIsDisplayed()
-        composeRule.onNodeWithText("2018 年 · MANGKHUT · NP_1822 · 本机收藏", substring = true)
-            .assertIsDisplayed()
-        assertTrue(
-            composeRule.onAllNodesWithText("收藏不等于远端记录一直打得开", substring = true)
-                .fetchSemanticsNodes().isNotEmpty()
-        )
-        composeRule.onNodeWithText("山竹").performClick()
-        assertEquals("NP_1822", opened)
+        composeRule.onNodeWithText("Favorites").assertIsDisplayed()
+        composeRule.onNodeWithText("Bavi").assertIsDisplayed()
+        composeRule.onNodeWithText("Year 2024 · 202418").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "A favorite stays in this list after the typhoon dissipates. " +
+                "Saving one does not keep the remote record available. " +
+                "History covers only the current and previous year (UTC+8); older years are rejected."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open Bavi").performClick()
+        assertEquals("2418", opened)
     }
 
     @Test
-    fun outOfRange_explainsThatTheFavoriteStays() {
+    fun outOfRange_explainsThatTheFavoriteIsKept() {
         composeRule.setContent {
-            Box(modifier = Modifier.size(412.dp, 915.dp)) {
-                TyphoonEyeTheme {
-                    FavoriteUnavailableScreen(
-                        name = "山竹",
-                        yearLabel = "2018",
-                        onBack = {},
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+            TyphoonEyeTheme {
+                FavoriteUnavailableScreen(
+                    name = "Bavi",
+                    onBack = {},
+                    onRemove = {}
+                )
             }
         }
-        composeRule.onNodeWithText("远端记录超出可查范围").assertIsDisplayed()
-        composeRule.onNodeWithText("山竹（2018）仍在收藏里。", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("今年和上一年（UTC+8）", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("也不保证以后还能取到远端路径", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Remote record unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Bavi is still saved on this device. Its year is outside the historical data this app can request: " +
+                "the current and previous year (UTC+8). Older years are rejected. " +
+                "A favorite does not keep that remote data available.",
+            substring = true
+        ).assertIsDisplayed()
     }
 
     @Test
-    fun detailStar_togglesFavorite() {
+    fun detail_togglesFavorite() {
         var favorited = false
         composeRule.setContent {
             var saved by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.size(412.dp, 915.dp)) {
-                TyphoonEyeTheme {
-                    DetailScreen(
-                        typhoon = Typhoon(
-                            id = "202609",
-                            name = "巴威",
-                            englishName = "BAVI",
-                            status = "active"
-                        ),
-                        loading = false,
-                        onBack = {},
-                        onShare = {},
-                        shareText = "",
-                        isFavorite = saved,
-                        onToggleFavorite = {
-                            saved = !saved
-                            favorited = saved
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+            TyphoonEyeTheme {
+                DetailScreen(
+                    typhoon = Typhoon(
+                        id = "202609",
+                        name = "巴威",
+                        englishName = "BAVI",
+                        status = "active",
+                        points = listOf(
+                            TyphoonPoint("2026-07-10 14:00", 21.8, 126.9, 960, 40, "13", "TY")
+                        )
+                    ),
+                    loading = false,
+                    onBack = {},
+                    onShare = {},
+                    shareText = "share",
+                    isFavorite = saved,
+                    onToggleFavorite = {
+                        saved = !saved
+                        favorited = saved
+                    }
+                )
             }
         }
-        composeRule.onNodeWithContentDescription("收藏 巴威").performClick()
+        composeRule.onNodeWithContentDescription("Favorite Bavi").performClick()
         assertTrue(favorited)
-        composeRule.onNodeWithContentDescription("取消收藏 巴威").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Unfavorite Bavi").assertIsDisplayed()
     }
+
+    private val storedOldStorm = FavoriteTyphoon(
+        stableId = "2418",
+        sourceId = "NP_2418",
+        trackId = "NP_2418",
+        name = "巴威",
+        englishName = "BAVI",
+        year = 2024,
+        basin = "NP",
+        number = "202418",
+        status = "dissipated",
+        strong = "TY",
+        favoritedAtEpochMs = 1L
+    )
 }
