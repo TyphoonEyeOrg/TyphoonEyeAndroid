@@ -56,20 +56,6 @@ sealed class TrackShareOutcome {
     data object ShareSheetFailed : TrackShareOutcome()
 }
 
-/** Build-time source flags. Values are booleans only — keys are never copied into the image. */
-fun shareSourceFlagsFromBuildConfig(): ShareSourceFlags {
-    val viaRelay = BuildConfig.RELAY_BASE_URL.isNotBlank()
-    val jwt = BuildConfig.QWEATHER_KID.isNotBlank() &&
-        BuildConfig.QWEATHER_PROJECT_ID.isNotBlank() &&
-        BuildConfig.QWEATHER_DEVELOPER_ID.isNotBlank() &&
-        BuildConfig.QWEATHER_PRIVATE_KEY.isNotBlank()
-    return ShareSourceFlags(
-        viaRelay = viaRelay,
-        juheEnabled = viaRelay || BuildConfig.JUHE_KEY.isNotBlank(),
-        qWeatherEnabled = viaRelay || jwt || BuildConfig.QWEATHER_API_KEY.isNotBlank()
-    )
-}
-
 /**
  * Content for the share image. User location is not a parameter: the picture
  * omits it unless a future caller passes [includeUserLocation] to [buildTrackShareImage].
