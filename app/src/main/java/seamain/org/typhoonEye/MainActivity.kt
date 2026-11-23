@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -35,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,7 +54,9 @@ import seamain.org.typhoonEye.ui.screens.LicensesScreen
 import seamain.org.typhoonEye.ui.util.displayName
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.domain.model.Typhoon
@@ -66,6 +70,7 @@ import seamain.org.typhoonEye.domain.favorites.containsStorm
 import seamain.org.typhoonEye.domain.favorites.matchesId
 import seamain.org.typhoonEye.domain.favorites.toFavoriteDraft
 import seamain.org.typhoonEye.domain.history.TrackPhase
+import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.FavoritesViewModel
 import seamain.org.typhoonEye.ui.HistoryViewModel
 import seamain.org.typhoonEye.ui.TyphoonUiState
@@ -81,8 +86,15 @@ import seamain.org.typhoonEye.ui.screens.HistoryScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.screens.SettingsScreen
 import seamain.org.typhoonEye.ui.screens.localizedTitle
+import seamain.org.typhoonEye.ui.share.ShareSourceKind
+import seamain.org.typhoonEye.ui.share.TrackShareOutcome
+import seamain.org.typhoonEye.ui.share.exportAndShareTrackImage
+import seamain.org.typhoonEye.ui.share.shareSourceFlagsFromBuildConfig
+import seamain.org.typhoonEye.ui.share.trackShareModel
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
+import seamain.org.typhoonEye.ui.util.MapBasemapPolicy
+import java.time.ZoneId
 
 private val LOCATION_PERMISSIONS = arrayOf(
     Manifest.permission.ACCESS_COARSE_LOCATION,
@@ -173,6 +185,7 @@ fun TyphoonApp(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val intensityFilter by viewModel.intensityFilter.collectAsStateWithLifecycle()
     val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
+    val lastUpdatedAtMs by viewModel.lastUpdatedAtMs.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
@@ -183,6 +196,72 @@ fun TyphoonApp(
     val loadedTyphoons = (uiState as? TyphoonUiState.Success)?.typhoons.orEmpty()
     val context = LocalContext.current
     val navController = rememberNavController()
+    val shareScope = rememberCoroutineScope()
+    var shareImageBusy by remember { mutableStateOf(false) }
+    val shareSourceFlags = remember { shareSourceFlagsFromBuildConfig() }
+    val shareDarkTheme = when (settings.themeMode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+
+    fun shareTrackImage(
+        typhoon: Typhoon,
+        sourceKind: ShareSourceKind,
+        updatedAtEpochMs: Long?,
+        fromCache: Boolean
+    ) {
+        if (shareImageBusy) return
+        shareImageBusy = true
+        val resolvedBasemap = MapBasemapPolicy.resolve(settings.mapBasemap, context)
+        val zone = ZoneId.systemDefault()
+        shareScope.launch {
+            try {
+                val model = trackShareModel(
+                    context = context,
+                    typhoon = typhoon,
+                    sourceKind = sourceKind,
+                    sourceFlags = shareSourceFlags,
+                    updatedAtEpochMs = updatedAtEpochMs,
+                    fromCache = fromCache,
+                    zone = zone,
+                    basemap = resolvedBasemap
+                )
+                val outcome = exportAndShareTrackImage(
+                    context = context,
+                    model = model,
+                    basemap = resolvedBasemap,
+                    darkTheme = shareDarkTheme,
+                    chooserTitle = context.getString(R.string.share_image_chooser),
+                    subject = context.getString(R.string.share_subject, typhoon.displayName(context))
+                )
+                val message = when (outcome) {
+                    is TrackShareOutcome.Shared ->
+                        if (outcome.basemapTilesIncluded) {
+                            null
+                        } else {
+                            context.getString(R.string.share_image_basemap_unavailable)
+                        }
+                    TrackShareOutcome.NoTrack -> context.getString(R.string.share_image_no_track)
+                    TrackShareOutcome.ExportFailed -> context.getString(R.string.share_image_export_failed)
+                    TrackShareOutcome.ShareSheetFailed -> context.getString(R.string.share_image_share_failed)
+                }
+                if (message != null) {
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.share_image_export_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                shareImageBusy = false
+            }
+        }
+    }
 
     var notificationsGranted by remember {
         mutableStateOf(viewModel.canPostLiveNotifications())
@@ -572,6 +651,14 @@ fun TyphoonApp(
                                     )
                                 )
                             }
+                        },
+                        onShareImage = {
+                            shareTrackImage(
+                                typhoon = track.typhoon,
+                                sourceKind = ShareSourceKind.Historical,
+                                updatedAtEpochMs = track.fetchedAtEpochMs,
+                                fromCache = track.fromCache
+                            )
                         }
                     )
                 }
@@ -685,6 +772,19 @@ fun TyphoonApp(
                                     intent,
                                     context.getString(R.string.share_chooser_title)
                                 )
+                            )
+                        },
+                        onShareImage = {
+                            val live = uiState as? TyphoonUiState.Success
+                            shareTrackImage(
+                                typhoon = typhoon,
+                                sourceKind = if (dataMode == DataMode.Demo) {
+                                    ShareSourceKind.Demo
+                                } else {
+                                    ShareSourceKind.Live
+                                },
+                                updatedAtEpochMs = lastUpdatedAtMs,
+                                fromCache = live?.fromCache == true
                             )
                         }
                     )

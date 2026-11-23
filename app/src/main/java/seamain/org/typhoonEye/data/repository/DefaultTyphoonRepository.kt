@@ -826,7 +826,8 @@ class DefaultTyphoonRepository @Inject constructor(
                         ),
                         trackMissing = trackMissing,
                         windRadiiMissing = windMissing,
-                        fromCache = relay.stale
+                        fromCache = relay.stale,
+                        fetchedAtEpochMs = now
                     )
                 )
             } catch (e: CancellationException) {
@@ -903,7 +904,8 @@ private fun CachedHistoricalTrack.toTrack(
         trackMissing = trackMissing,
         windRadiiMissing = windRadiiMissing,
         fromCache = fromCache,
-        staleReason = stale
+        staleReason = stale,
+        fetchedAtEpochMs = fetchedAtEpochMs
     )
 }
 

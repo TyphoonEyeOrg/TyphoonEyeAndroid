@@ -51,6 +51,13 @@ enum class ResolvedBasemap {
     OpenStreet
 }
 
+/**
+ * Credit baked into the Amap style JSON (`sources.amap-tiles.attribution`).
+ * The share image prints this exact string. It is the style's own credit, not a
+ * translation of the "Amap" chip.
+ */
+const val AMAP_STYLE_ATTRIBUTION = "© 高德地图"
+
 object MapBasemapPolicy {
 
     /**
@@ -132,7 +139,7 @@ object MapBasemapPolicy {
                     $tiles
                   ],
                   "tileSize": 256,
-                  "attribution": "© 高德地图",
+                  "attribution": "$AMAP_STYLE_ATTRIBUTION",
                   "maxzoom": 18
                 }
               },

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -95,6 +96,7 @@ fun DetailScreen(
     onBack: () -> Unit,
     onShare: (String) -> Unit,
     shareText: String,
+    onShareImage: () -> Unit = {},
     modifier: Modifier = Modifier,
     userLocation: UserLocation? = null,
     mapBasemap: MapBasemap = MapBasemap.Auto,
@@ -122,6 +124,7 @@ fun DetailScreen(
     val detailCd = stringResource(R.string.cd_typhoon_detail, title)
     val backCd = stringResource(R.string.back)
     val shareCd = stringResource(R.string.share_summary)
+    val shareImageCd = stringResource(R.string.share_image)
     val favoriteCd = stringResource(
         if (isFavorite) R.string.cd_favorite_remove else R.string.cd_favorite_add,
         title
@@ -166,6 +169,12 @@ fun DetailScreen(
                                 contentDescription = null
                             )
                         }
+                    }
+                    FilledTonalIconButton(
+                        onClick = onShareImage,
+                        modifier = Modifier.semantics { contentDescription = shareImageCd }
+                    ) {
+                        Icon(Icons.Outlined.Image, contentDescription = null)
                     }
                     FilledTonalIconButton(
                         onClick = { onShare(shareText) },

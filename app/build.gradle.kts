@@ -182,6 +182,10 @@ android {
         // TYP-58: this (GitHub) build sends lat/lng to QWeather, so location-based alerts
         // are opt-in: an untouched toggle resolves to off.
         buildConfigField("boolean", "LOCATION_ALERTS_DEFAULT", "false")
+        // Share-image source label only. Empty, same as the foss github flavor:
+        // this build calls Juhe and QWeather directly and must not claim the F-Droid relay.
+        buildConfigField("String", "RELAY_BASE_URL", "\"\"")
+        buildConfigField("String", "QWEATHER_DEVELOPER_ID", prop("QWEATHER_DEVELOPER_ID"))
     }
 
     signingConfigs {

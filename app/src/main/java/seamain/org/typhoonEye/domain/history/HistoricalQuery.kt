@@ -31,7 +31,12 @@ data class HistoricalTrack(
     val trackMissing: Boolean,
     val windRadiiMissing: Boolean,
     val fromCache: Boolean,
-    val staleReason: Throwable? = null
+    val staleReason: Throwable? = null,
+    /**
+     * When this track was fetched, or when the saved copy was written.
+     * Null only when the caller does not know. Never filled with "now" by the UI.
+     */
+    val fetchedAtEpochMs: Long? = null
 )
 
 /** This build can reach Juhe or nothing, but not QWeather, so a historical list cannot be loaded. */
