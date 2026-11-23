@@ -298,4 +298,24 @@
     <string name="history_forecast_absent">No forecast is shown for a historical record.</string>
     <string name="history_detail_banner">Historical record from QWeather. Not a current warning. Follow local authorities for warnings and disaster prevention.</string>
     <string name="history_reload">Reload</string>
+    <!-- TYP-68: favorites stay on this device. No account. -->
+    <string name="cd_open_favorites">Favorites</string>
+    <string name="favorites_title">Favorites</string>
+    <string name="favorites_empty_title">No favorite typhoons</string>
+    <string name="favorites_empty_body">Open a current or historical typhoon and save it. Favorites stay on this device.</string>
+    <string name="favorites_disclaimer">A favorite stays in this list after the typhoon dissipates. Saving one does not keep the remote record available. History covers only the current and previous year (UTC+8); older years are rejected.</string>
+    <string name="favorites_action_add">Favorite</string>
+    <string name="favorites_action_remove">Unfavorite</string>
+    <string name="cd_favorite_add">Favorite %1$s</string>
+    <string name="cd_favorite_remove">Unfavorite %1$s</string>
+    <string name="favorites_row_year">Year %1$d</string>
+    <string name="favorites_row_year_unknown">Year unknown</string>
+    <string name="favorites_row_meta">%1$s · %2$s</string>
+    <string name="favorites_last_status">Last saved status: %1$s</string>
+    <string name="cd_favorites_open">Open %1$s</string>
+    <string name="favorites_unnamed">Unnamed typhoon</string>
+    <string name="favorites_out_of_range_title">Remote record unavailable</string>
+    <string name="favorites_out_of_range_body">%1$s is still saved on this device. Its year is outside the historical data this app can request: the current and previous year (UTC+8). Older years are rejected. A favorite does not keep that remote data available.</string>
+    <string name="favorites_remote_unavailable_body">%1$s is still saved on this device. The remote record could not be loaded. A favorite does not guarantee that remote data stays available.</string>
+    <string name="favorites_remove">Remove</string>
 </resources>

@@ -60,17 +60,27 @@ import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.domain.model.AppUpdateState
+import seamain.org.typhoonEye.domain.favorites.FavoriteOpenPlan
+import seamain.org.typhoonEye.domain.favorites.FavoriteTyphoon
+import seamain.org.typhoonEye.domain.favorites.containsStorm
+import seamain.org.typhoonEye.domain.favorites.matchesId
+import seamain.org.typhoonEye.domain.favorites.toFavoriteDraft
 import seamain.org.typhoonEye.domain.history.TrackPhase
+import seamain.org.typhoonEye.ui.FavoritesViewModel
 import seamain.org.typhoonEye.ui.HistoryViewModel
+import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.TyphoonViewModel
 import seamain.org.typhoonEye.ui.components.AppUpdateHost
 import seamain.org.typhoonEye.ui.components.LocationOptInNoticeDialog
 import seamain.org.typhoonEye.ui.navigation.AppDestination
 import seamain.org.typhoonEye.ui.screens.DetailScreen
+import seamain.org.typhoonEye.ui.screens.FavoriteUnavailableScreen
+import seamain.org.typhoonEye.ui.screens.FavoritesScreen
 import seamain.org.typhoonEye.ui.screens.HistoryDetailStatus
 import seamain.org.typhoonEye.ui.screens.HistoryScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.screens.SettingsScreen
+import seamain.org.typhoonEye.ui.screens.localizedTitle
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
@@ -97,6 +107,7 @@ class MainActivity : AppCompatActivity() {
             // @AndroidEntryPoint supplies the Hilt ViewModel factory automatically.
             val typhoonVm: TyphoonViewModel = viewModel()
             val historyVm: HistoryViewModel = viewModel()
+            val favoritesVm: FavoritesViewModel = viewModel()
             val settings by typhoonVm.settings.collectAsStateWithLifecycle()
             val deepLinkId by pendingTyphoonId.collectAsStateWithLifecycle()
             val loadDemo by pendingLoadDemo.collectAsStateWithLifecycle()
@@ -118,6 +129,7 @@ class MainActivity : AppCompatActivity() {
                     TyphoonApp(
                         viewModel = typhoonVm,
                         historyViewModel = historyVm,
+                        favoritesViewModel = favoritesVm,
                         deepLinkTyphoonId = deepLinkId,
                         onDeepLinkConsumed = { pendingTyphoonId.value = null },
                         loadDemoRequested = loadDemo,
@@ -147,6 +159,7 @@ class MainActivity : AppCompatActivity() {
 fun TyphoonApp(
     viewModel: TyphoonViewModel,
     historyViewModel: HistoryViewModel,
+    favoritesViewModel: FavoritesViewModel,
     deepLinkTyphoonId: String? = null,
     onDeepLinkConsumed: () -> Unit = {},
     loadDemoRequested: Boolean = false,
@@ -166,6 +179,8 @@ fun TyphoonApp(
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val historyUi by historyViewModel.ui.collectAsStateWithLifecycle()
     val historyDetail by historyViewModel.detailUi.collectAsStateWithLifecycle()
+    val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
+    val loadedTyphoons = (uiState as? TyphoonUiState.Success)?.typhoons.orEmpty()
     val context = LocalContext.current
     val navController = rememberNavController()
 
@@ -248,6 +263,36 @@ fun TyphoonApp(
     fun leaveDetail() {
         viewModel.selectTyphoon(null)
         navController.popBackStack()
+    }
+
+    fun toggleFavorite(sourceId: String, save: () -> Unit) {
+        if (favorites.containsStorm(sourceId)) {
+            favoritesViewModel.unfavorite(sourceId)
+        } else {
+            save()
+        }
+    }
+
+    fun openFavorite(favorite: FavoriteTyphoon) {
+        when (val plan = favoritesViewModel.planOpen(favorite, loadedTyphoons)) {
+            is FavoriteOpenPlan.Live -> {
+                viewModel.selectTyphoon(plan.typhoon)
+                navController.navigate(AppDestination.detail(plan.typhoon.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is FavoriteOpenPlan.History -> {
+                historyViewModel.loadDetail(plan.storm)
+                navController.navigate(AppDestination.historyDetail(plan.storm.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is FavoriteOpenPlan.OutOfRange -> {
+                navController.navigate(AppDestination.favoriteUnavailable(favorite.stableId)) {
+                    launchSingleTop = true
+                }
+            }
+        }
     }
 
     LaunchedEffect(deepLinkTyphoonId) {
@@ -396,6 +441,11 @@ fun TyphoonApp(
                         launchSingleTop = true
                     }
                 },
+                onOpenFavorites = {
+                    navController.navigate(AppDestination.Favorites) {
+                        launchSingleTop = true
+                    }
+                },
                 onTyphoonClick = { typhoon ->
                     viewModel.selectTyphoon(typhoon)
                     navController.navigate(AppDestination.detail(typhoon.id)) {
@@ -457,6 +507,10 @@ fun TyphoonApp(
                         launchSingleTop = true
                     }
                 },
+                isFavorite = { id -> favorites.containsStorm(id) },
+                onToggleFavorite = { storm ->
+                    toggleFavorite(storm.id) { favoritesViewModel.favorite(storm.toFavoriteDraft()) }
+                },
                 onOpenAttribution = { url ->
                     runCatching {
                         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
@@ -478,6 +532,7 @@ fun TyphoonApp(
                 Unit
             }
             BackHandler(onBack = leaveHistoryDetail)
+            val savedFavorite = favorites.firstOrNull { it.matchesId(typhoonId) }
             val statusMessage = when (historyDetail.phase) {
                 TrackPhase.OfflineReady -> stringResource(R.string.history_offline)
                 TrackPhase.RateLimited -> stringResource(R.string.history_rate_limit)
@@ -498,6 +553,12 @@ fun TyphoonApp(
                         trackMissing = track.trackMissing,
                         windRadiiMissing = track.windRadiiMissing,
                         statusMessage = statusMessage,
+                        isFavorite = favorites.containsStorm(track.typhoon.id),
+                        onToggleFavorite = {
+                            toggleFavorite(track.typhoon.id) {
+                                favoritesViewModel.favorite(track.typhoon.toFavoriteDraft())
+                            }
+                        },
                         onShare = { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -520,10 +581,46 @@ fun TyphoonApp(
                 else -> {
                     HistoryDetailStatus(
                         phase = historyDetail.phase,
-                        onBack = leaveHistoryDetail
+                        onBack = leaveHistoryDetail,
+                        footnote = savedFavorite?.let { favorite ->
+                            stringResource(
+                                R.string.favorites_remote_unavailable_body,
+                                favorite.localizedTitle()
+                            )
+                        }
                     )
                 }
             }
+        }
+
+        composable(AppDestination.Favorites) {
+            BackHandler { navController.popBackStack() }
+            FavoritesScreen(
+                favorites = favorites,
+                onBack = { navController.popBackStack() },
+                onOpen = { favorite -> openFavorite(favorite) },
+                onUnfavorite = { favorite -> favoritesViewModel.unfavorite(favorite.sourceId) }
+            )
+        }
+
+        composable(
+            route = AppDestination.FavoriteUnavailable,
+            arguments = listOf(
+                navArgument(AppDestination.ArgStableId) { type = NavType.StringType }
+            )
+        ) { entry ->
+            val stableId = entry.arguments?.getString(AppDestination.ArgStableId).orEmpty()
+            val favorite = favorites.firstOrNull { it.stableId == stableId }
+            val leave = { navController.popBackStack(); Unit }
+            BackHandler(onBack = leave)
+            FavoriteUnavailableScreen(
+                name = favorite?.localizedTitle() ?: stableId,
+                onBack = leave,
+                onRemove = {
+                    favoritesViewModel.unfavorite(favorite?.sourceId ?: stableId)
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(AppDestination.Licenses) {
@@ -568,6 +665,12 @@ fun TyphoonApp(
                         shareText = viewModel.shareSummary(typhoon),
                         userLocation = userLocation,
                         mapBasemap = settings.mapBasemap,
+                        isFavorite = favorites.containsStorm(typhoon.id),
+                        onToggleFavorite = {
+                            toggleFavorite(typhoon.id) {
+                                favoritesViewModel.favorite(typhoon.toFavoriteDraft())
+                            }
+                        },
                         onShare = { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

@@ -298,4 +298,24 @@
     <string name="history_forecast_absent">歷史紀錄唔顯示預報，亦唔會自己作一份。</string>
     <string name="history_detail_banner">和風天氣嘅歷史紀錄，唔係而家嘅預警。預警同防災行動請跟當地官方發布。</string>
     <string name="history_reload">重新載入</string>
+    <!-- TYP-68 -->
+    <string name="cd_open_favorites">收藏</string>
+    <string name="favorites_title">收藏咗嘅颱風</string>
+    <string name="favorites_empty_title">未有收藏</string>
+    <string name="favorites_empty_body">打開而家或者歷史颱風就可以收藏。收藏只會留喺呢部機。</string>
+    <string name="favorites_disclaimer">颱風停編之後，收藏仍然會留喺呢份名單。收藏唔等於遠端紀錄一直攞到。歷史資料只覆蓋今年同上一年（UTC+8），再早嘅年份會被拒絕。</string>
+    <string name="favorites_action_add">收藏</string>
+    <string name="favorites_action_remove">取消收藏</string>
+    <string name="cd_favorite_add">收藏%1$s</string>
+    <string name="cd_favorite_remove">取消收藏%1$s</string>
+    <string name="favorites_row_year">%1$d年</string>
+    <string name="favorites_row_year_unknown">年份未知</string>
+    <string name="favorites_row_meta">%1$s · %2$s</string>
+    <string name="favorites_last_status">收藏嗰陣嘅狀態：%1$s</string>
+    <string name="cd_favorites_open">打開%1$s</string>
+    <string name="favorites_unnamed">未命名颱風</string>
+    <string name="favorites_out_of_range_title">遠端紀錄攞唔到</string>
+    <string name="favorites_out_of_range_body">%1$s 仍然留喺呢部機，但佢嘅年份超出呢個應用可以請求嘅歷史範圍（今年同上一年，UTC+8）。再早嘅年份會被拒絕。收藏唔等於遠端資料一直攞到。</string>
+    <string name="favorites_remote_unavailable_body">%1$s 仍然留喺呢部機。遠端紀錄載入唔到。收藏唔保證遠端資料一直攞到。</string>
+    <string name="favorites_remove">移除</string>
 </resources>

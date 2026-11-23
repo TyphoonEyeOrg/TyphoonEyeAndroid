@@ -17,8 +17,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -65,7 +67,9 @@ fun HistoryScreen(
     onRefresh: () -> Unit,
     onOpenStorm: (HistoricalStorm) -> Unit,
     onOpenAttribution: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFavorite: (String) -> Boolean = { false },
+    onToggleFavorite: ((HistoricalStorm) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val presentation = state.presentation
@@ -202,6 +206,11 @@ fun HistoryScreen(
                 val title = storm.name.ifBlank { storm.id }
                 val number = storm.number ?: storm.id
                 val openCd = stringResource(R.string.cd_history_open, title)
+                val saved = isFavorite(storm.id)
+                val favoriteCd = stringResource(
+                    if (saved) R.string.cd_favorite_remove else R.string.cd_favorite_add,
+                    title
+                )
                 ListItem(
                     headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
@@ -218,6 +227,26 @@ fun HistoryScreen(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    },
+                    trailingContent = if (onToggleFavorite == null) {
+                        null
+                    } else {
+                        {
+                            IconButton(
+                                onClick = { onToggleFavorite(storm) },
+                                modifier = Modifier.semantics { contentDescription = favoriteCd }
+                            ) {
+                                Icon(
+                                    imageVector = if (saved) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = null,
+                                    tint = if (saved) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier
@@ -238,7 +267,9 @@ fun HistoryScreen(
 fun HistoryDetailStatus(
     phase: TrackPhase,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Shown when a saved favorite could not load its remote record. */
+    footnote: String? = null
 ) {
     val message = when (phase) {
         TrackPhase.Loading -> stringResource(R.string.history_loading)
@@ -267,11 +298,22 @@ fun HistoryDetailStatus(
             )
         }
     ) { padding ->
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(padding).padding(16.dp)
-        )
+        Column(
+            modifier = Modifier.padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (!footnote.isNullOrBlank()) {
+                Text(
+                    text = footnote,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
