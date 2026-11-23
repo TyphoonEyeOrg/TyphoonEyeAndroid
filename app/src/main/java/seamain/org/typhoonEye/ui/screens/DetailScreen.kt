@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -106,7 +108,10 @@ fun DetailScreen(
     /** A track exists, but every point omitted wind-circle radii. */
     windRadiiMissing: Boolean = false,
     /** Offline or rate-limit note. Null when this record is a fresh response. */
-    statusMessage: String? = null
+    statusMessage: String? = null,
+    /** Null hides the control (previews and callers that cannot persist a favorite). */
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -120,6 +125,11 @@ fun DetailScreen(
     val detailCd = stringResource(R.string.cd_typhoon_detail, title)
     val backCd = stringResource(R.string.back)
     val shareCd = stringResource(R.string.share_summary)
+    val favoriteCd = if (isFavorite) {
+        stringResource(R.string.cd_favorite_remove, title)
+    } else {
+        stringResource(R.string.cd_favorite_add, title)
+    }
     val loadingDetailCd = stringResource(R.string.cd_loading_detail)
 
     Scaffold(
@@ -150,6 +160,17 @@ fun DetailScreen(
                     }
                 },
                 actions = {
+                    if (onToggleFavorite != null) {
+                        FilledTonalIconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.semantics { contentDescription = favoriteCd }
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                contentDescription = null
+                            )
+                        }
+                    }
                     FilledTonalIconButton(
                         onClick = { onShare(shareText) },
                         modifier = Modifier.semantics { contentDescription = shareCd }

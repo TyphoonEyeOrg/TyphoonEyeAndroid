@@ -343,4 +343,23 @@
     <string name="history_forecast_absent">历史记录不显示预报，也不会在本地编造预报。</string>
     <string name="history_detail_banner">来自和风天气的历史记录，不是当前预警。预警和防灾行动请以当地权威机构发布为准。</string>
     <string name="history_reload">重新加载</string>
+    <string name="cd_open_favorites">收藏</string>
+    <string name="favorites_title">收藏的台风</string>
+    <string name="favorites_empty_title">还没有收藏</string>
+    <string name="favorites_empty_body">打开当前或历史台风后即可收藏。收藏只保存在这台设备上。</string>
+    <string name="favorites_disclaimer">台风停编后，收藏仍会留在这份列表里。收藏不能让远端记录一直可取。历史资料只覆盖当前年和上一年（UTC+8），更早的年份会被拒绝。</string>
+    <string name="favorites_action_add">收藏</string>
+    <string name="favorites_action_remove">取消收藏</string>
+    <string name="cd_favorite_add">收藏%1$s</string>
+    <string name="cd_favorite_remove">取消收藏%1$s</string>
+    <string name="favorites_row_year">%1$d年</string>
+    <string name="favorites_row_year_unknown">年份未知</string>
+    <string name="favorites_row_meta">%1$s · %2$s</string>
+    <string name="favorites_last_status">收藏时的状态：%1$s</string>
+    <string name="cd_favorites_open">打开%1$s</string>
+    <string name="favorites_unnamed">未命名台风</string>
+    <string name="favorites_out_of_range_title">远端记录不可用</string>
+    <string name="favorites_out_of_range_body">%1$s 仍保存在这台设备上，但它的年份超出本应用可请求的历史范围（当前年与上一年，UTC+8）。更早的年份会被拒绝。收藏不等于远端数据一直可取。</string>
+    <string name="favorites_remote_unavailable_body">%1$s 仍保存在这台设备上。远端记录无法加载。收藏不能保证远端数据一直可取。</string>
+    <string name="favorites_remove">移除</string>
 </resources>
