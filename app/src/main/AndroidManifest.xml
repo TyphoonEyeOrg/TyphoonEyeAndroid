@@ -13,6 +13,13 @@
     <!-- In-app APK install from GitHub Releases -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/png" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TyphoonEyeApp"
         android:allowBackup="true"

@@ -38,7 +38,12 @@ data class HistoricalTrack(
     val trackMissing: Boolean,
     val windRadiiMissing: Boolean,
     val fromCache: Boolean,
-    val staleReason: TyphoonDataError? = null
+    val staleReason: TyphoonDataError? = null,
+    /**
+     * When this track was fetched, or when the saved copy was written.
+     * Null only when the caller does not know. Never filled with "now" by the UI.
+     */
+    val fetchedAtEpochMs: Long? = null
 )
 
 /**
